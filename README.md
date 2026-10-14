@@ -18,7 +18,7 @@ python -m unittest discover -s tests -t .
 ## What it does
 | Area | Features |
 |---|---|
-| **HTTP** | GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS; params, headers; bodies: form-data, x-www-form-urlencoded, raw JSON / XML / text / HTML / JavaScript, binary, GraphQL, SOAP 1.1 / 1.2; redirects, SSL-verify and timeout settings; cookie jar |
+| **HTTP** | GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS; params, headers (with **Bulk Edit** as text); hover `{{variables}}` to see values and type `{{` for autocomplete; bodies: form-data, x-www-form-urlencoded, raw JSON / XML / text / HTML / JavaScript, binary, GraphQL, SOAP 1.1 / 1.2; redirects, SSL-verify and timeout settings; cookie jar |
 | **Auth** | API key, Bearer, Basic, Digest, OAuth 1.0 (HMAC-SHA1 / SHA256 / PLAINTEXT), OAuth 2.0 (client credentials, password, authorization code + PKCE, refresh), AWS Signature v4, Hawk, NTLMv2 |
 | **Response** | Pretty / Raw / Preview (HTML, images), search, wrap, status, time, size, headers, cookies, test results, "Save as example"; **Copy** the body, headers, status line, whole response, the request as cURL or its URL; save the body to a file; copy table rows with Ctrl+C or right-click |
 | **Other protocols** | WebSocket, Server-Sent Events, MQTT 3.1.1 (QoS 0-2), gRPC (through server reflection: unary, server / client / bidirectional streaming), SOAP |

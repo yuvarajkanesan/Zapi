@@ -141,6 +141,12 @@ def main():
             v.rtabs.bar.setCurrentIndex(1)
             v.auth_type.setCurrentIndex(v.auth_type.findData("oauth2"))
             shot(w, "04-auth-dark.png")
+            v.rtabs.bar.setCurrentIndex(2)                   # Headers, in Bulk Edit mode
+            v.headers.set_bulk(True)
+            v.headers.text.setPlainText("Accept: application/json\nAuthorization: Bearer {{token}}\nX-Client: zapi\n"
+                                        "// X-Debug: 1")
+            shot(w, "10-bulk-edit.png")
+            v.headers.set_bulk(False)
             d = CodeDialog(v.collect(), ws.variable_values(c["id"]), w)
             d.lang.setCurrentText("Python (requests)")
             d.show()

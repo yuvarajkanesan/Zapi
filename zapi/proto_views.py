@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, 
                                QInputDialog, QLabel, QLineEdit, QPushButton, QSplitter, QStackedWidget, QTabBar,
                                QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
 
-from . import grpc_client, protocols, store, theme, variables
-from .widgets import CodeEditor, KVTable, Worker, flat, pretty_json, primary
+from . import grpc_client, protocols, store, theme, variable_assist, variables
+from .widgets import CodeEditor, KVEditor, KVTable, Worker, flat, pretty_json, primary
 
 
 def _esc(s):
@@ -61,6 +61,7 @@ class ProtoBase(QWidget):
         self.content.setSpacing(8)
         self._build(self.content)
         root.addLayout(self.content, 1)
+        variable_assist.attach_all(self)        # after the layout is adopted, so its fields are children of the view
         self.load(self.req)
         self.mark_saved()
         self._loading = False
@@ -171,6 +172,7 @@ class MessageLog(QWidget):
         self.count.setObjectName("muted")
         self.filter = QLineEdit()
         self.filter.setPlaceholderText("Filter messages")
+        self.filter.setProperty("noVariables", True)
         self.filter.setClearButtonEnabled(True)
         self.filter.setFixedWidth(200)
         self.filter.textChanged.connect(self._render)
@@ -314,7 +316,7 @@ class StreamView(ProtoBase):
         titles = {"websocket": ["Message", "Headers", "Settings"], "sse": ["Headers", "Body"],
                   "mqtt": ["Publish", "Subscribe", "Connection"]}[self.kind]
         bar, stack = self._tabs(titles)
-        self.headers = KVTable(key_hint="Header", value_hint="Value")
+        self.headers = KVEditor(KVTable(key_hint="Header", value_hint="Value"), "header")
         self.headers.changed.connect(self._edited)
         if self.kind == "websocket":
             stack.addWidget(self._ws_message())
@@ -804,7 +806,7 @@ class GrpcView(ProtoBase):
         self.message.textChanged.connect(self._edited)
         ml.addWidget(self.message, 1)
         stack.addWidget(msg)
-        self.headers = KVTable(key_hint="Metadata key", value_hint="Value")
+        self.headers = KVEditor(KVTable(key_hint="Metadata key", value_hint="Value"), "header")
         self.headers.changed.connect(self._edited)
         stack.addWidget(self.headers)
         rl.addWidget(bar_)

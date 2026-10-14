@@ -9,6 +9,7 @@ from PySide6.QtCore import QEvent  # noqa: E402
 from PySide6.QtGui import QColor  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from tests.qt_cleanup import purge  # noqa: E402
 from zapi import store, theme  # noqa: E402
 from zapi.app import MainWindow  # noqa: E402
 
@@ -26,6 +27,9 @@ def dispose(window):
 
 
 class PaletteTests(unittest.TestCase):
+    def setUp(self):
+        purge()
+
     def tearDown(self):
         theme.apply("Dark", "Amber", 10)
         app.setStyleSheet(theme.qss())
@@ -82,6 +86,9 @@ class PaletteTests(unittest.TestCase):
 
 
 class WindowTests(unittest.TestCase):
+    def setUp(self):
+        purge()
+
     def tearDown(self):
         theme.apply("Dark", "Amber", 10)
         app.setStyleSheet(theme.qss())

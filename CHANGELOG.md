@@ -7,6 +7,9 @@
 - JavaScript pre-request and test scripts (`pm` API); `zapi-cli run` for CI with JSON / JUnit reports.
 - Import: cURL (bash / cmd), `fetch()`, Postman, OpenAPI. Export: Zapi JSON, Postman v2.1, history, full backup.
 - Themes: System, Dark, Light, Midnight, High contrast, with accent colours and editor font size.
+- Variables: hover a `{{variable}}` to see its value and scope (secrets masked); typing `{{` (or Ctrl+Space) lists existing variables, filtered as you type, in the URL, headers, params, body, auth and bulk-edit fields.
+- Bulk Edit for Headers, Params and form-urlencoded bodies (also WebSocket / SSE / gRPC headers): paste a block of `Key: Value`
+  lines, `//` disables a line, switches back to the table without losing anything.
 - Copy menu on responses, Save body to file, copyable tables, tab / history context menus, cookie manager, proxy and
   client-certificate settings, built-in help (F1).
 - Secrets are encrypted at rest with Windows DPAPI (including hand-typed auth headers, params, URLs and scripts that hold

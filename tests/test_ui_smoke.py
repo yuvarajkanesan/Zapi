@@ -55,6 +55,16 @@ class UiTests(unittest.TestCase):
         self.win.show_environments()
         self.assertIs(self.win.pages.currentWidget(), self.win.env_page)
 
+    def test_the_brand_is_shown_once(self):
+        """The Windows title bar shows the icon and "Zapi"; the in-app header must not repeat them."""
+        from PySide6.QtWidgets import QLabel, QWidget
+        header = self.win.findChild(QWidget, "header")
+        labels = header.findChildren(QLabel)
+        self.assertFalse([l for l in labels if "Zapi" in l.text() and l is not header], [l.text() for l in labels])
+        self.assertFalse([l for l in labels if l.pixmap() is not None and not l.pixmap().isNull()])
+        self.assertEqual(self.win.windowTitle(), "Zapi")
+        self.assertFalse(self.win.windowIcon().isNull())
+
     def test_empty_sidebar_state(self):
         self.assertEqual(self.win.sidebar.stack.currentIndex(), 3)
         self.ws.add_collection("A")

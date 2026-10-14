@@ -15,8 +15,8 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 
 from shiboken6 import isValid
 
-from . import curl, http_client, oauth2, store, theme, variables, vault
-from .widgets import CodeEditor, CopyTable, KVTable, Worker, flat, pretty_json, pretty_xml, primary
+from . import curl, http_client, oauth2, store, theme, variable_assist, variables, vault
+from .widgets import CodeEditor, CopyTable, KVEditor, KVTable, Worker, flat, pretty_json, pretty_xml, primary
 
 PRETTY_LIMIT = 2 * 1024 * 1024
 
@@ -146,6 +146,8 @@ class RequestView(QWidget):
         self._saved = None
         self._token_worker = None
         self._build()
+        # hover a {{variable}} for its value, type {{ for suggestions (not in the response search or the scripts)
+        variable_assist.attach_all(self, skip=(self.search, self.script_pre, self.script_test))
         self.load(self.req)
         self.mark_saved()
         self._loading = False
@@ -234,8 +236,8 @@ class RequestView(QWidget):
         lay.setContentsMargins(18, 8, 18, 0)
         lay.setSpacing(0)
         self.rstack = QStackedWidget()
-        self.params = KVTable(key_hint="Key", value_hint="Value")
-        self.headers = KVTable(key_hint="Header", value_hint="Value")
+        self.params = KVEditor(KVTable(key_hint="Key", value_hint="Value"), "param")
+        self.headers = KVEditor(KVTable(key_hint="Header", value_hint="Value"), "header")
         self.params.changed.connect(self._params_changed)
         self.headers.changed.connect(self._headers_changed)
         self.rstack.addWidget(self.params)
@@ -391,7 +393,7 @@ class RequestView(QWidget):
         self.form = KVTable(with_type=True)
         self.form.changed.connect(self._edited)
         self.bstack.addWidget(self.form)                                 # form-data
-        self.urlenc = KVTable()
+        self.urlenc = KVEditor(KVTable(), "param")
         self.urlenc.changed.connect(self._edited)
         self.bstack.addWidget(self.urlenc)                               # urlencoded
         self.raw = CodeEditor()

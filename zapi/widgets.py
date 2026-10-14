@@ -5,10 +5,11 @@ import re
 from PySide6.QtCore import QRect, QRegularExpression, QSize, QThread, Qt, Signal
 from PySide6.QtGui import (QColor, QFont, QFontMetrics, QKeySequence, QPainter, QSyntaxHighlighter, QTextCharFormat,
                            QTextFormat)
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QHBoxLayout, QHeaderView, QLineEdit,
-                               QPlainTextEdit, QPushButton, QTableWidget, QTextEdit, QToolButton, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QHBoxLayout, QHeaderView, QLabel,
+                               QLineEdit, QPlainTextEdit, QPushButton, QStackedWidget, QTableWidget, QTextEdit,
+                               QToolButton, QVBoxLayout, QWidget)
 
-from . import store, theme
+from . import store, theme, variable_assist
 
 
 def _fmt(color, bold=False):
@@ -245,8 +246,9 @@ class KVTable(QTableWidget):
 
     changed = Signal()
 
-    def __init__(self, with_type=False, key_hint="Key", value_hint="Value", parent=None):
+    def __init__(self, with_type=False, key_hint="Key", value_hint="Value", parent=None, variables=True):
         super().__init__(0, 5 if with_type else 4, parent)
+        self.variables = variables           # hover / completion for {{variables}} in the cells
         self.with_type = with_type
         self.key_hint, self.value_hint = key_hint, value_hint
         self._loading = False
@@ -320,6 +322,9 @@ class KVTable(QTableWidget):
         val.setPlaceholderText(self.value_hint)
         self.setCellWidget(i, 1, key)
         self.setCellWidget(i, 2, val)
+        if self.variables:
+            variable_assist.attach(key)
+            variable_assist.attach(val)
         if self.with_type:
             combo = QComboBox()
             combo.addItems(["text", "file"])
@@ -355,6 +360,127 @@ class KVTable(QTableWidget):
 
     def sizeHint(self):
         return QSize(400, 200)
+
+
+# ---- bulk edit: the same rows as plain text ----------------------------------------------------------------
+def format_rows(rows, style="header"):
+    """Rows as text, one per line: `Key: Value` for headers, `key=value` for query / form parameters.
+    A disabled row starts with //."""
+    sep = ": " if style == "header" else "="
+    out = []
+    for r in rows:
+        line = f"{r['key']}{sep}{r.get('value', '')}"
+        out.append(line if r.get("enabled", True) else "// " + line)
+    return "\n".join(out)
+
+
+def parse_rows(text, style="header"):
+    """The inverse of format_rows. Forgiving: blank lines are skipped, a line without a separator is a key with an empty
+    value, `Key:Value` works for parameters too, and HTTP/2 pseudo headers (:authority: x) are ignored."""
+    rows = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        enabled = True
+        if line.startswith("//"):
+            enabled, line = False, line[2:].strip()
+            if not line:
+                continue
+        if line.startswith(":"):                             # :authority: example.com
+            continue
+        if style == "header":
+            cut = line.find(":")
+        else:
+            eq, colon = line.find("="), line.find(":")
+            cut = eq if eq >= 0 else colon
+        key, value = (line[:cut], line[cut + 1:]) if cut > 0 else (line, "")
+        if key.strip():
+            rows.append(store.kv(key.strip(), value.strip(), enabled))
+    return rows
+
+
+class KVEditor(QWidget):
+    """A KVTable with a Bulk Edit switch that shows the same rows as text. Drop-in for KVTable (rows / set_rows / changed)."""
+
+    changed = Signal()
+
+    def __init__(self, table, style="header", parent=None):
+        super().__init__(parent)
+        self.table = table
+        self.style = style
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        bar = QHBoxLayout()
+        bar.setContentsMargins(0, 4, 0, 0)
+        self.hint = QLabel("")
+        self.hint.setObjectName("muted")
+        self.toggle = flat(QPushButton("Bulk Edit"))
+        self.toggle.setToolTip("Edit all rows as text: paste a block of headers or parameters")
+        self.toggle.clicked.connect(lambda: self.set_bulk(not self.bulk_active))
+        bar.addWidget(self.hint, 1)
+        bar.addWidget(self.toggle)
+        lay.addLayout(bar)
+        self.stack = QStackedWidget()
+        self.stack.addWidget(table)
+        self.text = None                      # the text editor is created the first time Bulk Edit is used: a request
+        lay.addWidget(self.stack, 1)          # tab with three tables would otherwise carry three extra code editors
+        table.changed.connect(self.changed)
+        self._syncing = False
+        self._update_hint()
+
+    def _ensure_text(self):
+        if self.text is None:
+            self.text = CodeEditor()
+            self.text.set_language("text")
+            variable_assist.attach(self.text)
+            self.text.setPlaceholderText(
+                "Accept: application/json\nAuthorization: Bearer {{token}}\n// X-Disabled: off" if self.style == "header"
+                else "page=1\nlimit=20\n// debug=true")
+            self.stack.addWidget(self.text)
+            self.text.textChanged.connect(self._text_changed)
+        return self.text
+
+    @property
+    def bulk_active(self):
+        return self.stack.currentIndex() == 1
+
+    def _update_hint(self):
+        self.hint.setText("" if not self.bulk_active else
+                          ("One per line as Key: Value. Start a line with // to turn it off." if self.style == "header"
+                           else "One per line as key=value. Start a line with // to turn it off."))
+        self.toggle.setText("Key-Value Edit" if self.bulk_active else "Bulk Edit")
+
+    def set_bulk(self, on):
+        if on == self.bulk_active:
+            return
+        self._syncing = True
+        try:
+            if on:
+                self._ensure_text().setPlainText(format_rows(self.table.rows(), self.style))
+            else:
+                self.table.set_rows(parse_rows(self.text.toPlainText(), self.style))
+        finally:
+            self._syncing = False
+        self.stack.setCurrentIndex(1 if on else 0)
+        self._update_hint()
+        if not on:
+            self.changed.emit()
+
+    def _text_changed(self):
+        if not self._syncing:
+            self.changed.emit()
+
+    def rows(self):
+        return parse_rows(self.text.toPlainText(), self.style) if self.bulk_active else self.table.rows()
+
+    def set_rows(self, rows):
+        self.table.set_rows(rows)
+        if self.bulk_active:
+            self._syncing = True
+            self.text.setPlainText(format_rows(self.table.rows(), self.style))
+            self._syncing = False
 
 
 class CopyTable(QTableWidget):

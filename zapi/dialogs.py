@@ -626,7 +626,7 @@ class MockDialog(QDialog):
         hint.setObjectName("muted")
         hint.setWordWrap(True)
         rl.addWidget(hint)
-        self.headers = KVTable(key_hint="Response header", value_hint="Value")
+        self.headers = KVTable(key_hint="Response header", value_hint="Value", variables=False)   # mock templates, not env variables
         self.headers.changed.connect(self._detail_changed)
         self.headers.setMaximumHeight(150)
         rl.addWidget(self.headers)
@@ -926,6 +926,9 @@ SHORTCUTS = [
     ("Ctrl+Shift+E", "Environments"), ("Ctrl+`", "Show / hide the console"), ("F1", "This help"),
     ("Paste a cURL command, fetch() call or API file into any URL bar", "Imports it"),
     ("Right-click a tab, request, history entry or response", "Copy, duplicate, move, save and more"),
+    ("Hover a {{variable}}", "Shows its value and where it comes from (secrets stay masked)"),
+    ("Type {{  or  Ctrl+Space", "Suggests existing variables, filtered as you type; Up/Down, Enter or Tab to insert, Esc to close"),
+    ("Bulk Edit (above the Headers, Params and form-urlencoded tables)", "Edit all rows as text, one Key: Value per line; // turns a line off"),
 ]
 
 SCRIPTING = """Scripts are JavaScript. They run in a separate process with a 10 second limit.

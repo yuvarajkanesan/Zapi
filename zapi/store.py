@@ -4,7 +4,7 @@ import os
 import time
 import uuid
 
-from . import config, vault
+from . import config, variables, vault
 
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 HISTORY_LIMIT = 200
@@ -300,6 +300,30 @@ class Workspace:
         coll_scope = {v["key"]: v.get("value", "") for v in (coll or {}).get("variables", [])
                       if v.get("enabled", True) and v.get("key")}
         return {**self._scope(self.globals), **coll_scope, **self._scope(self.active_environment())}
+
+    def variable_catalog(self, collection_id=None):
+        """Every variable the user can use right now, for hover and completion:
+        {name: {"value", "scope", "secret", "dynamic"}}. Same precedence as variable_values (environment wins)."""
+        out = {}
+
+        def put(key, value, scope, secret):
+            out[key] = {"value": value, "scope": scope, "secret": secret, "dynamic": False}
+        for v in self.globals["vars"]:
+            if v.get("enabled", True) and v.get("key"):
+                put(v["key"], v.get("current", ""), "Globals", vault.is_secret_variable(v))
+        coll = self.collection(collection_id) if collection_id else None
+        for v in (coll or {}).get("variables", []):
+            if v.get("enabled", True) and v.get("key"):
+                value = v.get("value", "")
+                put(v["key"], value, f"Collection · {coll['name']}",
+                    vault.is_secret_variable({"key": v["key"], "initial": value, "current": value}))
+        env = self.active_environment()
+        for v in (env or {}).get("vars", []):
+            if v.get("enabled", True) and v.get("key"):
+                put(v["key"], v.get("current", ""), f"Environment · {env['name']}", vault.is_secret_variable(v))
+        for name in variables._DYNAMIC:
+            out.setdefault(name, {"value": "", "scope": "Dynamic", "secret": False, "dynamic": True})
+        return out
 
     def request_options(self):
         """Network settings handed to http_client.send by the UI and the runner."""

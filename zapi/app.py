@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFileDialog, QF
                                QMenu, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QSplitter, QStackedWidget, QTabBar,
                                QToolButton, QVBoxLayout, QWidget)
 
-from . import APP_NAME, VERSION, curl, importers, mock, scripting, store, theme, variables, vault
+from . import APP_NAME, VERSION, curl, importers, mock, scripting, store, theme, variable_assist, variables, vault
 from .dialogs import (CodeDialog, CookieDialog, CurlDialog, HelpDialog, ImportDialog, MockBridge, MockDialog,
                       PassphraseDialog, RunnerDialog, SaveRequestDialog, SendThread, SettingsDialog)
 from .env_view import EnvironmentsPage
@@ -168,6 +168,7 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
         self.setMinimumSize(900, 560)
         self._build()
+        variable_assist.set_provider(lambda: self.ws.variable_catalog(self._current_collection_id()))
         self._wire_shortcuts()
         self.refresh_environment_box()
         self._restore_tabs()
@@ -277,12 +278,9 @@ class MainWindow(QMainWindow):
         h.setObjectName("header")
         h.setFixedHeight(48)
         lay = QHBoxLayout(h)
-        lay.setContentsMargins(16, 0, 14, 0)
+        lay.setContentsMargins(12, 0, 14, 0)
         lay.setSpacing(10)
-        logo = QLabel()
-        logo.setPixmap(theme.logo_pixmap(24))
-        name = QLabel(f"<b>{APP_NAME}</b>")
-        name.setStyleSheet("font-size: 10.5pt;")
+        # no logo or name here: the Windows title bar above already shows the icon and "Zapi"
         self.workspace_btn = QPushButton()
         self.workspace_btn.setProperty("flat", True)
         self.workspace_btn.setIcon(theme.icon("chevron-down", theme.MUTED, 12))
@@ -290,8 +288,6 @@ class MainWindow(QMainWindow):
         self.workspace_btn.setStyleSheet(f"QPushButton {{ color: {theme.BLUE}; background: transparent; border: none; padding: 4px 6px; }}"
                                          f"QPushButton:hover {{ color: {theme.ACCENT_HOVER}; }}")
         self.workspace_btn.clicked.connect(self._workspace_menu)
-        lay.addWidget(logo)
-        lay.addWidget(name)
         lay.addWidget(self.workspace_btn)
         lay.addStretch(1)
         self.env_box = QComboBox()

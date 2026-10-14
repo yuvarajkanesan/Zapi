@@ -589,6 +589,8 @@ QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 QSplitter::handle {{ background: {BORDER}; }}
 QSplitter::handle:vertical {{ height: 1px; }}
 QSplitter::handle:horizontal {{ width: 1px; }}
+QListWidget#varPopup {{ background: {PANEL2}; border: 1px solid {BORDER2}; border-radius: 6px; padding: 3px; outline: 0; }}
+QListWidget#varPopup::item {{ border-radius: 4px; padding: 0; }}
 QMenu {{ background: {PANEL2}; border: 1px solid {BORDER2}; padding: 4px; border-radius: 6px; }}
 QMenu::item {{ padding: 6px 22px 6px 14px; border-radius: 4px; }}
 QMenu::item:selected {{ background: {MENU_SEL}; }}
