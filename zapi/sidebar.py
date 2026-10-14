@@ -16,6 +16,22 @@ from .widgets import primary
 ROLE_ID, ROLE_KIND, ROLE_CID = Qt.UserRole, Qt.UserRole + 1, Qt.UserRole + 2
 
 
+def day_label(ts, now=None):
+    """History group heading: Today, Yesterday, the weekday for the last week, then the date."""
+    now = time.time() if now is None else now
+    day = time.localtime(ts)
+    days = (time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1)) -
+            time.mktime(day[:3] + (0, 0, 0, 0, 0, -1))) / 86400
+    days = round(days)
+    if days <= 0:
+        return "Today"
+    if days == 1:
+        return "Yesterday"
+    if days < 7:
+        return time.strftime("%A", day)
+    return time.strftime("%d %b %Y", day).lstrip("0")
+
+
 def _method_label(text):
     lb = QLabel(text)
     lb.setFixedWidth(52)
@@ -142,7 +158,7 @@ class Sidebar(QWidget):
         hl = QVBoxLayout(hist)
         hl.setContentsMargins(0, 0, 0, 0)
         self.history = QListWidget()
-        self.history.itemClicked.connect(lambda it: self.openHistory.emit(it.data(Qt.UserRole)))
+        self.history.itemClicked.connect(lambda it: it.data(Qt.UserRole) and self.openHistory.emit(it.data(Qt.UserRole)))
         self.history.setContextMenuPolicy(Qt.CustomContextMenu)
         self.history.customContextMenuRequested.connect(self._history_menu)
         hl.addWidget(self.history, 1)
@@ -208,7 +224,7 @@ class Sidebar(QWidget):
 
     # ---- refresh -------------------------------------------------------------------
     def _tab_changed(self, i):
-        self.search.setPlaceholderText("Search requests" if i != 1 else "Search history")
+        self.search.setPlaceholderText(["Search requests", "Search history", "Search variables"][i] if i < 3 else "Search")
         self.refresh()
 
     def _layout_for_tab(self):
@@ -216,7 +232,7 @@ class Sidebar(QWidget):
         empty = i == 0 and not self.ws.collections
         self.stack.setCurrentIndex(3 if empty else i)
         self.actions.setVisible(i == 0 and not empty)
-        self.search.setVisible(i == 1 or (i == 0 and not empty))
+        self.search.setVisible(i in (1, 2) or (i == 0 and not empty))
 
     def refresh(self, *_):
         self._fill_tree()
@@ -282,10 +298,22 @@ class Sidebar(QWidget):
     def _fill_history(self):
         q = self.search.text().strip().lower() if self.tabs.currentIndex() == 1 else ""
         self.history.clear()
-        for h in self.ws.history:
+        last_day = None
+        for h in sorted(self.ws.history, key=lambda e: e["at"], reverse=True):
             r = h["request"]
             if q and q not in r["url"].lower() and q not in r["name"].lower():
                 continue
+            label = day_label(h["at"])
+            if label != last_day:
+                last_day = label
+                head = QListWidgetItem()
+                head.setFlags(Qt.NoItemFlags)             # a heading: not clickable, never opens anything
+                self.history.addItem(head)
+                lb = QLabel(label.upper())
+                lb.setStyleSheet(f"color: {theme.MUTED}; font-size: 8pt; font-weight: 700; letter-spacing: 1px; "
+                                 "background: transparent; padding: 8px 6px 2px 6px;")
+                self.history.setItemWidget(head, lb)
+                head.setSizeHint(QSize(10, 30))
             it = QListWidgetItem()
             it.setData(Qt.UserRole, h["id"])
             code = h.get("status", 0)
@@ -300,9 +328,12 @@ class Sidebar(QWidget):
     def _fill_variables(self):
         env = self.ws.active_environment()
         self.var_title.setText(f"Active: {env['name']}" if env else "No environment selected")
+        q = self.search.text().strip().lower() if self.tabs.currentIndex() == 2 else ""
         rows = [("globals", v) for v in self.ws.globals["vars"] if v.get("enabled", True) and v["key"]]
         if env:
             rows += [("env", v) for v in env["vars"] if v.get("enabled", True) and v["key"]]
+        if q:
+            rows = [(s, v) for s, v in rows if q in v["key"].lower() or (not v.get("secret") and q in v.get("current", "").lower())]
         self.var_table.setRowCount(len(rows))
         for i, (scope, v) in enumerate(rows):
             self.var_table.setItem(i, 0, QTableWidgetItem(v["key"] + ("  (global)" if scope == "globals" else "")))

@@ -42,6 +42,16 @@ class EnvTable(QTableWidget):
             self._append(v)
         self._append(None)
         self._loading = False
+        self.apply_filter(getattr(self, "_filter", ""))
+
+    def apply_filter(self, text):
+        """Hide the rows that do not match (by name or value). Hidden rows are still saved; the blank last row stays."""
+        q = text.strip().lower()
+        self._filter = q
+        for i in range(self.rowCount()):
+            key, ini, cur = (self.cellWidget(i, c).text().lower() for c in (1, 2, 3))
+            blank = not (key or ini or cur)
+            self.setRowHidden(i, bool(q) and not blank and not (q in key or q in ini or q in cur))
 
     def vars(self):
         out = []
@@ -205,8 +215,14 @@ class EnvironmentsPage(QWidget):
         frame.setObjectName("tableFrame")
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(1, 1, 1, 1)
+        self.var_search = QLineEdit()
+        self.var_search.setPlaceholderText("Search variables by name or value")
+        self.var_search.setClearButtonEnabled(True)
+        self.var_search.setStyleSheet("margin: 8px 8px 4px 8px;")
+        fl.addWidget(self.var_search)
         self.table = EnvTable()
         self.table.changed.connect(self._mark_dirty)
+        self.var_search.textChanged.connect(self.table.apply_filter)
         fl.addWidget(self.table)
         ml.addWidget(frame, 1)
 
