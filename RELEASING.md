@@ -24,7 +24,8 @@
 ## Preview-release kit (in the repo)
 - `docs/RELEASE_NOTES_0.1-preview.md` (with screenshots from `tools/make_screenshots.py`), issue templates, `SECURITY.md`,
   `CONTRIBUTING.md`, "Copy diagnostic info" in the app menu.
-- `tools/smoke_installed.ps1` + `docs/zapi-sandbox.wsb` + `docs/CLEAN_MACHINE_TEST.md`: the install / upgrade / uninstall test.
+- `tools/make_test_installers.ps1`, `tools/smoke_installed.ps1`, `docs/zapi-sandbox.wsb`, `docs/CLEAN_MACHINE_TEST.md`: the
+  install / upgrade / downgrade / uninstall lifecycle test (36 checks).
 - TODO before publishing: set the security contact in `SECURITY.md` and `.github/ISSUE_TEMPLATE/config.yml`, upload the
   installer with its SHA-256, and add the repository URL to the README.
 

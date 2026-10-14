@@ -148,15 +148,26 @@ _families = {}
 
 
 def load_fonts():
+    """Registers the bundled fonts and returns the Qt ids it got (a failed font is -1).
+
+    The files are read by Python and handed to Qt as bytes: QFontDatabase.addApplicationFont(path) fails when the
+    install folder contains characters outside the system code page (for example Chinese letters in a user name)."""
+    from PySide6.QtCore import QByteArray
+    ids = []
     folder = resource("fonts")
     if os.path.isdir(folder):
         for name in sorted(os.listdir(folder)):
             if name.lower().endswith(".ttf"):
-                QFontDatabase.addApplicationFont(os.path.join(folder, name))
+                try:
+                    with open(os.path.join(folder, name), "rb") as f:
+                        ids.append(QFontDatabase.addApplicationFontFromData(QByteArray(f.read())))
+                except OSError:
+                    ids.append(-1)
     have = set(QFontDatabase.families())
     _families["ui"] = next((f for f in ("IBM Plex Sans", "Segoe UI", "Arial") if f in have), "Sans Serif")
     _families["mono"] = next((f for f in ("JetBrains Mono", "Cascadia Mono", "Consolas", "Courier New") if f in have),
                              "Monospace")
+    return ids
 
 
 def ui_family():

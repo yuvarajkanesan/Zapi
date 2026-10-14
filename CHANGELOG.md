@@ -11,5 +11,8 @@
   client-certificate settings, built-in help (F1).
 - Secrets are encrypted at rest with Windows DPAPI (including hand-typed auth headers, params, URLs and scripts that hold
   credentials); shared exports leave credentials out; full backups are protected by a passphrase.
-- Installer: fixed the uninstaller leaving a stray `;` in the user PATH; added an automated install / upgrade / uninstall test.
+- Installer: upgrades close the running app and remove files the old version had; downgrades are refused; uninstall keeps your
+  data by default (`/REMOVEDATA` deletes it) and only stops processes that run from the install folder. Fixed a stray `;` left in
+  PATH, the uninstaller killing itself, and fonts not loading from folders with non-Latin characters. Added an automated
+  lifecycle test.
 - Crash reports stay on the computer; third-party licence notices are installed with the app.

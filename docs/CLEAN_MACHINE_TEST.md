@@ -3,27 +3,50 @@
 The installer and the app have so far been exercised on the developer's PC only. Before announcing, run this on machines
 that have never seen Python, Qt or Zapi.
 
-## 1. Automated part (about 2 minutes)
+## 1. Automated part (about 5 minutes)
 Use Windows Sandbox (Windows 10/11 Pro or Enterprise → "Turn Windows features on or off" → *Windows Sandbox*) or a fresh VM.
 
+**Build the test installers once** (on the build machine, after `build.bat`; needs Inno Setup):
+```
+powershell -ExecutionPolicy Bypass -File tools\make_test_installers.ps1
+```
+This writes an older (0.0.9, with files the current version does not ship) and a newer (9.9) installer into `dist\test`.
+Without them the upgrade and downgrade scenarios are reported as SKIP.
+
 **Sandbox:** edit the three host paths in `docs/zapi-sandbox.wsb`, create the folder `C:\Users\Public\Desktop\ZapiResults`,
-double-click the file. It installs the real installer, runs everything below and writes `report.md` into that folder.
+double-click the file. It runs the test with `-CleanMachine` and writes `report.md` into that folder.
 
 **VM or PC:**
 ```
-powershell -ExecutionPolicy Bypass -File tools\smoke_installed.ps1 -Installer path\to\Zapi-Setup.exe
+powershell -ExecutionPolicy Bypass -File tools\smoke_installed.ps1
 ```
-Add `-CleanMachine` **only in a VM / Sandbox**: it also runs an uninstall that deletes `%APPDATA%\Zapi`.
 
-What it checks: silent install, every expected file, version resources (Lavati Softwares), Start menu + desktop shortcuts,
-uninstall entry, PATH entry for `zapi-cli`, the packaged self-test (script engine, TLS, gRPC libraries, DPAPI, themes...),
-`zapi-cli` against a local server (exit codes 0 and 1), the GUI opening, staying responsive and closing without a crash
-report, no leftover processes, upgrade over the existing install (one uninstall entry, PATH not duplicated), uninstall
-removing files / shortcuts / PATH / registry, and your PATH restored exactly. The only expected failure today is
-"installer is signed" until you sign it.
+Safety: the script refuses to run if Zapi is already installed (`-ReplaceExisting` allows it), restores your user PATH exactly
+as it found it (text and registry type), and deletes `%APPDATA%\Zapi` only when that folder holds nothing but the script's own
+marker file, or when `-CleanMachine` is given (that belongs in a VM / Sandbox).
 
-Last result on the developer PC: **20 passed, 1 expected failure (unsigned)**. It found and fixed a real uninstaller bug
-(a stray `;` left in the user PATH).
+What it checks:
+1. **Fresh install**: every file, version resources, shortcuts, uninstall entry, `zapi-cli` on PATH exactly once, the packaged
+   self-test, `zapi-cli` against a local server (exit codes 0 and 1), the GUI opening, staying responsive and closing without a
+   crash report.
+2. **Reinstall** over the same version: one uninstall entry, PATH not duplicated.
+3. **Uninstall while Zapi is running**: the app is stopped, everything is removed, and **your data is kept** by default.
+4. **Upgrade from an older version while it is running**: the old app is closed, files the old version had are removed (inside
+   `_internal` and at the top level), the choices made at first install (PATH on, desktop shortcut off) are remembered, your data
+   is untouched, there is one uninstall entry, and a later uninstall leaves nothing behind.
+5. **Downgrade protection**: a silent install of an older version over a newer one is refused; `/ALLOWDOWNGRADE` allows it.
+6. **Where it installs**: the default per-user folder (no admin prompt), and a folder with spaces, accents, Chinese letters and
+   brackets.
+7. **`/REMOVEDATA`** deletes the user's data (run only when the data folder holds nothing of value, or with `-CleanMachine`).
+
+The only expected failure today is "installer is signed" until the installer is signed.
+
+Silent switches. Install: `/DIR=...`, `/TASKS="addtopath,desktopicon"`, `/ALLOWDOWNGRADE`. Uninstall: none keeps your data,
+`/REMOVEDATA` deletes it.
+
+Last result on the developer PC: **36 passed, 1 expected failure (unsigned), 1 skipped (the data-deleting test, because real
+Zapi data exists there)**. Running it found and fixed four real bugs: a stray `;` left in the user PATH, the uninstaller killing
+itself, fonts not loading from a folder with non-Latin letters, and a silent uninstall that deleted the user's data by default.
 
 ## 2. Manual part (about 20 minutes per machine)
 Tick these on each machine and note the Windows build.
@@ -63,10 +86,13 @@ Tick these on each machine and note the Windows build.
 - [ ] Open a 5 MB JSON response; Zapi stays responsive.
 - [ ] Close the window during a request: it exits, no leftover `Zapi.exe` in Task Manager.
 
-**Installer lifecycle**
+**Installer lifecycle (the parts a script cannot judge)**
+- [ ] Run the installer by hand, not silently: every page looks right, Back and Cancel work, the Finish page launches Zapi.
 - [ ] Install an older build, then the new one over it: data kept, shortcuts fine.
-- [ ] Uninstall, choose *Yes* (keep data), reinstall: collections are still there.
-- [ ] Uninstall, choose *No*: `%APPDATA%\Zapi` is gone.
+- [ ] Leave unsaved edits in a tab, run a newer installer: Zapi closes by itself and the tabs come back afterwards.
+- [ ] Try to install an older version over a newer one by hand: you are asked before it replaces anything.
+- [ ] Uninstall (the wizard preselects *Yes, keep my data*), reinstall: collections are still there.
+- [ ] Uninstall and choose *No*: `%APPDATA%\Zapi` is gone.
 - [ ] SmartScreen / Defender: note exactly what the user sees (screenshot it) for the release notes.
 
 ## 3. Report

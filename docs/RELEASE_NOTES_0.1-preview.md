@@ -47,7 +47,11 @@ tests, and run it all from the command line. Everything stays on your computer: 
 2. Run it. No administrator rights are needed. Tick *Add zapi-cli to the PATH* if you want the command line.
 3. Start Zapi from the Start menu. Press **F1** for shortcuts and the scripting reference.
 
-To remove it: Settings → Apps → Zapi → Uninstall. You are asked whether to keep your collections and settings.
+To update, run the newer installer: it closes Zapi, replaces the files, and keeps your collections, settings and PATH choice. It
+refuses to replace a newer version with an older one by accident.
+
+To remove it: Settings → Apps → Zapi → Uninstall. You are asked whether to keep your collections and settings; **keeping them is
+the default**. For silent uninstalls, `/REMOVEDATA` deletes them.
 
 ## Reporting problems
 Open an issue and fill in the template. In Zapi use **My Workspace menu → Copy diagnostic info** and paste it in. It contains

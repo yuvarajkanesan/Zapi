@@ -118,3 +118,56 @@ class BuildArtifactTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FontLoadingTests(unittest.TestCase):
+    """The installed app must find its fonts whatever the folder is called (found by the installer lifecycle test)."""
+
+    def test_fonts_load_from_a_folder_with_non_latin_characters(self):
+        import shutil
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance() or QApplication([])
+        from zapi import theme
+        base = tempfile.mkdtemp()
+        for name in ("李", "Zoë Zapi (test)", "plain"):
+            fonts = os.path.join(base, name, "fonts")
+            shutil.copytree(os.path.join(ROOT, "fonts"), fonts)
+            real = theme.resource
+            theme.resource = lambda *parts, _f=fonts: _f if parts == ("fonts",) else real(*parts)
+            try:
+                ids = theme.load_fonts()
+            finally:
+                theme.resource = real
+            self.assertEqual(len(ids), len([f for f in os.listdir(fonts) if f.endswith(".ttf")]), name)
+            self.assertTrue(all(i >= 0 for i in ids), (name, ids))
+            self.assertEqual(theme.ui_family(), "IBM Plex Sans", name)
+
+
+class InstallerScriptTests(unittest.TestCase):
+    """Facts about installer.iss that the lifecycle test (tools/smoke_installed.ps1) depends on."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.iss = open(os.path.join(ROOT, "installer.iss"), encoding="utf-8").read()
+
+    def test_default_version_matches_the_app(self):
+        import re
+        m = re.search(r'#ifndef AppVersion\s+#define AppVersion "([^"]+)"', self.iss)
+        self.assertEqual(m.group(1), VERSION)                    # build.bat passes the real one; this keeps a manual compile honest
+
+    def test_the_uninstaller_never_kills_itself_and_data_is_kept_by_default(self):
+        self.assertIn("-notlike ''unins*''", self.iss)           # the uninstaller runs from the install folder
+        self.assertIn("KeepData := not HasParam('/REMOVEDATA')", self.iss)
+        self.assertIn("MB_YESNO or MB_DEFBUTTON1", self.iss)     # "keep my data" is the default button
+        self.assertNotIn("KeepData := HasParam('/KEEPDATA')", self.iss)
+
+    def test_upgrade_cleans_old_files_and_refuses_downgrades(self):
+        for needle in (r'Name: "{app}\_internal"', r'Name: "{app}\Zapi*.exe"', r'Name: "{app}\*.txt"', "InitializeSetup",
+                       "/ALLOWDOWNGRADE", "PrepareToInstall", "UsePreviousAppDir=yes", "UsePreviousTasks=yes",
+                       "CloseApplications=yes"):
+            self.assertIn(needle, self.iss, needle)
+        self.assertNotIn(r'Name: "{app}\*"', self.iss)          # never wipe the whole folder: the uninstaller lives there
+
+    def test_path_cleanup_matches_whole_entries_only(self):
+        self.assertIn("Padded := ';' + Paths + ';'", self.iss)
