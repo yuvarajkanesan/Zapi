@@ -50,6 +50,19 @@ class PaletteTests(unittest.TestCase):
                 self.assertGreaterEqual(contrast(theme.ACCENT, theme.BG), 3.0, (name, accent, "accent vs bg"))
                 self.assertGreaterEqual(contrast(theme.ACCENT_TEXT, theme.ACCENT_HOVER), 4.5, (name, accent, "hover"))
 
+    def test_text_stays_readable_on_hover_and_selected_rows(self):
+        for name in theme.PALETTES:
+            theme.apply(name)
+            for bg in (theme.HOVER, theme.SELECTED, theme.MENU_SEL, theme.BTN_HOVER):
+                self.assertGreaterEqual(contrast(theme.TEXT, bg), 7.0, (name, "text", bg))
+                self.assertGreaterEqual(contrast(theme.MUTED, bg), 4.5, (name, "muted", bg))
+            for bg in (theme.MENU_SEL, theme.SELECTED):
+                for verb in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"):
+                    self.assertGreaterEqual(contrast(theme.method_color(verb), bg), 3.0, (name, verb, bg))
+            # a hover must be visible against the panel it appears on
+            for bg in (theme.PANEL, theme.PANEL2, theme.BG):
+                self.assertGreaterEqual(contrast(theme.MENU_SEL, bg), 1.1, (name, "hover visible", bg))
+
     def test_high_contrast_meets_aaa(self):
         theme.apply("High contrast")
         self.assertGreaterEqual(contrast(theme.TEXT, theme.BG), 15)

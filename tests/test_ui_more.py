@@ -326,3 +326,57 @@ class ProtocolViewTests(UiBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SplitterTests(unittest.TestCase):
+    def test_request_and_response_panes_can_be_dragged_both_ways(self):
+        from PySide6.QtWidgets import QSplitter
+        rv = RequestView(store.new_request(url=""))
+        rv.resize(1000, 800)
+        rv.show()
+        app.processEvents()
+        split = rv.findChild(QSplitter)
+        self.assertGreaterEqual(split.handleWidth(), 5)                       # wide enough to grab
+        total = sum(split.sizes())
+        split.moveSplitter(40, 1)                                             # drag the divider all the way up
+        app.processEvents()
+        self.assertLessEqual(split.sizes()[0], 120)
+        self.assertGreaterEqual(split.sizes()[1], total - 140)
+        split.moveSplitter(total, 1)                                          # and all the way down
+        app.processEvents()
+        self.assertLessEqual(split.sizes()[1], 120)
+        self.assertGreaterEqual(split.sizes()[0], total - 140)
+        rv.deleteLater()
+
+
+class CopyFeedbackTests(unittest.TestCase):
+    def test_copy_button_shows_a_tick_then_goes_back(self):
+        from PySide6.QtTest import QTest
+        from zapi import widgets
+        rv = RequestView(store.new_request(url="http://x/y"))
+        rv.show()
+        app.processEvents()
+        before = rv.copy_btn.text()
+        rv.response = None
+        QApplication.clipboard().clear()
+        rv.copy_what("curl")                                                  # the menu path flashes the toolbar button too
+        self.assertIn("curl", QApplication.clipboard().text())
+        self.assertEqual(rv.copy_btn.text().strip(), "Copied")
+        self.assertIn(theme.GREEN, rv.copy_btn.styleSheet())
+        rv.copy_what("curl")                                                  # again while showing: still restores to the original
+        widgets.copy_feedback(rv.copy_btn, ms=50)
+        QTest.qWait(400)
+        self.assertEqual(rv.copy_btn.text(), before)
+        self.assertEqual(rv.copy_btn.styleSheet(), "")
+        self.assertIsNone(rv.copy_btn.graphicsEffect())
+        rv.copy_what("body")                                                  # nothing to copy yet: no tick
+        self.assertEqual(rv.copy_btn.text(), before)
+
+    def test_feedback_on_a_deleted_button_is_harmless(self):
+        from PySide6.QtWidgets import QPushButton
+        from zapi import widgets
+        b = QPushButton("Copy")
+        widgets.copy_feedback(b, ms=20)
+        b.deleteLater()
+        app.processEvents()
+        widgets.copy_feedback(None)

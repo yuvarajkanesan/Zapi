@@ -353,3 +353,35 @@ class UiFlowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WarningBehaviourTests(unittest.TestCase):
+    def test_secret_warning_is_worded_properly_and_hides_itself(self):
+        from PySide6.QtTest import QTest
+        from zapi.request_view import RequestView
+        RequestView.WARN_SECONDS = 0.1
+        try:
+            v = RequestView(tricky_request(), values_provider=lambda cid: {"token": "t", "hint": "h"})
+            v.show()
+            v._check_variables()
+            text = v.warn.text()
+            self.assertIn("appears to be a secret", text)
+            self.assertNotIn("what looks like", text)
+            self.assertIn("contain a value", text)                      # two places: plural
+            self.assertTrue(v.warn.isVisible())
+            QTest.qWait(400)
+            self.assertFalse(v.warn.isVisible())
+            v._check_variables()                                        # editing elsewhere must not bring it straight back
+            self.assertFalse(v.warn.isVisible())
+            v.req["scripts"]["pre"] = v.req["scripts"]["test"] = ""
+            v.req["body"]["raw"] = "plain"
+            v.script_pre.setPlainText("")
+            v.script_test.setPlainText("")
+            v.raw.setPlainText("plain")
+            v._check_variables()                                        # problem fixed ...
+            v.raw.setPlainText('{"password": "hunter2hunter2"}')
+            v._check_variables()                                        # ... and back again: warn again
+            self.assertTrue(v.warn.isVisible())
+            self.assertIn("body contains", v.warn.text())
+        finally:
+            del RequestView.WARN_SECONDS

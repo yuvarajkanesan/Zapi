@@ -536,6 +536,54 @@ class CopyTable(QTableWidget):
         m.exec(self.viewport().mapToGlobal(pos))
 
 
+def copy_feedback(button, label="Copied", ms=1500):
+    """After a copy: the button turns green with a tick and 'Copied', then goes back. Safe to call again while it shows."""
+    import shiboken6
+    from PySide6.QtCore import QPropertyAnimation, QTimer
+    from PySide6.QtWidgets import QGraphicsOpacityEffect
+    if button is None or not shiboken6.isValid(button):
+        return
+    saved = button.property("_copy_saved")
+    if saved is None:                                           # first call: remember how the button looked
+        saved = (button.text(), button.icon(), button.styleSheet(), button.minimumWidth())
+        button.setProperty("_copy_saved", saved)
+        button.setMinimumWidth(max(button.width(), button.sizeHint().width()))      # no jumping around
+    button.setText("  " + label)
+    button.setIcon(theme.icon("check", theme.GREEN, 14))
+    button.setStyleSheet(f"QPushButton {{ color: {theme.GREEN}; border: 1px solid {theme.GREEN}; }}")
+    fx = QGraphicsOpacityEffect(button)                         # a short pop so it is noticed
+    button.setGraphicsEffect(fx)
+    anim = QPropertyAnimation(fx, b"opacity", button)
+    anim.setDuration(260)
+    anim.setStartValue(0.35)
+    anim.setEndValue(1.0)
+    anim.finished.connect(lambda: shiboken6.isValid(button) and button.setGraphicsEffect(None))
+    anim.start(QPropertyAnimation.DeleteWhenStopped)
+    old = button.property("_copy_timer")
+    if old is not None and shiboken6.isValid(old):
+        old.stop()
+    timer = QTimer(button)
+    timer.setSingleShot(True)
+
+    def restore():
+        s = button.property("_copy_saved")
+        if s is not None:
+            button.setText(s[0])
+            button.setIcon(s[1])
+            button.setStyleSheet(s[2])
+            button.setMinimumWidth(s[3])
+            button.setProperty("_copy_saved", None)
+    timer.timeout.connect(restore)
+    button.setProperty("_copy_timer", timer)
+    timer.start(ms)
+
+
+def copy_text(text, button=None):
+    """Put text on the clipboard and show the tick on `button`."""
+    QApplication.clipboard().setText(text)
+    copy_feedback(button)
+
+
 def primary(button: QPushButton, radius=""):
     """Amber call-to-action. It carries its own stylesheet because container rules such as
     `#sidebar QWidget {background: transparent}` would otherwise blank it."""

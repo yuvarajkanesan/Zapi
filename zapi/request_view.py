@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 from shiboken6 import isValid
 
 from . import curl, http_client, oauth2, store, theme, variable_assist, variables, vault
-from .widgets import CodeEditor, CopyTable, KVEditor, KVTable, Worker, flat, pretty_json, pretty_xml, primary
+from .widgets import (CodeEditor, CopyTable, KVEditor, KVTable, Worker, copy_text, flat, pretty_json, pretty_xml,
+                      primary)
 
 PRETTY_LIMIT = 2 * 1024 * 1024
 
@@ -225,8 +226,11 @@ class RequestView(QWidget):
 
         split = QSplitter(Qt.Vertical)
         split.setChildrenCollapsible(False)
-        split.addWidget(self._build_request_side())
-        split.addWidget(self._build_response_side())
+        top, bottom = self._build_request_side(), self._build_response_side()
+        top.setMinimumHeight(110)               # both halves can be dragged small; without this the layouts' own minimums block it
+        bottom.setMinimumHeight(110)
+        split.addWidget(top)
+        split.addWidget(bottom)
         split.setSizes([330, 300])
         root.addWidget(split, 1)
 
@@ -583,7 +587,7 @@ class RequestView(QWidget):
         if text is None:
             self._say("Nothing to copy yet: send the request first.", ok=False)
             return False
-        QApplication.clipboard().setText(text)
+        copy_text(text, self.copy_btn)
         self._say(f"Copied {names[what]} ({len(text):,} characters)")
         return True
 
@@ -755,7 +759,17 @@ class RequestView(QWidget):
 
     def _style_method(self):
         c = theme.method_color(self.method.currentText())
-        self.method.setStyleSheet(f"color: {c};")
+        # colour only the box itself; the dropdown list keeps normal text and colours each verb by itself
+        self.method.setStyleSheet(f"QComboBox#methodBox {{ color: {c}; }} "
+                                  f"QComboBox#methodBox QAbstractItemView {{ color: {theme.TEXT}; background: {theme.PANEL2}; "
+                                  f"border: 1px solid {theme.BORDER2}; selection-background-color: {theme.SELECTED}; "
+                                  f"selection-color: {theme.TEXT}; padding: 3px; outline: 0; }} "
+                                  f"QComboBox#methodBox QAbstractItemView::item {{ padding: 6px 10px; min-height: 20px; "
+                                  f"border-radius: 4px; }} "
+                                  f"QComboBox#methodBox QAbstractItemView::item:selected {{ background: {theme.SELECTED}; }} "
+                                  f"QComboBox#methodBox QAbstractItemView::item:hover {{ background: {theme.MENU_SEL}; }}")
+        for i in range(self.method.count()):
+            self.method.setItemData(i, QColor(theme.method_color(self.method.itemText(i))), Qt.ForegroundRole)
 
     def _params_changed(self):
         if self._loading:
@@ -867,20 +881,37 @@ class RequestView(QWidget):
                 if n not in missing:
                     missing.append(n)
         if missing:
-            self.warn.setStyleSheet(f"color: {theme.ACCENT}; font-size: 8pt;")
-            self.warn.setText("Unresolved variable" + ("s" if len(missing) > 1 else "") + ": " +
-                              ", ".join(missing) + " - pick an environment or define them under Variables.")
-            self.warn.show()
+            self._advise("Unresolved variable" + ("s" if len(missing) > 1 else "") + ": " + ", ".join(missing) +
+                         ". Select an environment or define them under Variables.")
             return
         risky = [name for name, text in (("pre-request script", r["scripts"]["pre"]), ("tests", r["scripts"]["test"]),
                                          ("body", r["body"]["raw"])) if vault.contains_secret_literal(text)]
         if risky:
-            self.warn.setStyleSheet(f"color: {theme.ACCENT}; font-size: 8pt;")
-            self.warn.setText("The " + " and ".join(risky) + " contain what looks like a secret. It is encrypted on "
-                              "disk and left out of shared exports, but a Secret variable is better: use {{name}} or "
-                              "pm.environment.get('name').")
-            self.warn.show()
+            plural = len(risky) > 1
+            self._advise("The " + " and ".join(risky) + (" contain" if plural else " contains") +
+                         " a value that appears to be a secret. It is encrypted on disk and omitted from shared "
+                         "exports. For stronger protection, store it as a Secret variable and reference it as "
+                         "{{name}} (or pm.environment.get('name') in scripts).")
         else:
+            self._warn_dismissed = None
+            self.warn.hide()
+
+    WARN_SECONDS = 20
+
+    def _advise(self, text):
+        """A persistent hint under the URL bar that hides itself after WARN_SECONDS and stays hidden until it changes."""
+        if text == getattr(self, "_warn_dismissed", None):
+            self.warn.hide()
+            return
+        self.warn.setStyleSheet(f"color: {theme.ACCENT}; font-size: 8pt;")
+        if self.warn.text() != text or not self.warn.isVisible():
+            self.warn.setText(text)
+            QTimer.singleShot(self.WARN_SECONDS * 1000, lambda: self._expire_advice(text))
+        self.warn.show()
+
+    def _expire_advice(self, text):
+        if isValid(self) and self.warn.text() == text:
+            self._warn_dismissed = text
             self.warn.hide()
 
     def refresh_variables(self):

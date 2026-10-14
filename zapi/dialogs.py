@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDia
                                QVBoxLayout, QWidget)
 
 from . import curl, executor, importers, mock, runner, store, theme, vault
-from .widgets import CodeEditor, CopyTable, KVTable, primary
+from .widgets import CodeEditor, CopyTable, KVTable, copy_text, primary
 
 
 class SendThread(QThread):
@@ -140,7 +140,7 @@ class CodeDialog(QDialog):
         row.addWidget(self.lang)
         row.addStretch(1)
         copy = QPushButton("Copy")
-        copy.clicked.connect(lambda: QApplication.clipboard().setText(self.view.toPlainText()))
+        copy.clicked.connect(lambda: copy_text(self.view.toPlainText(), copy))
         row.addWidget(copy)
         lay.addLayout(row)
         self.view = CodeEditor(read_only=True)

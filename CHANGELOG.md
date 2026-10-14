@@ -7,6 +7,9 @@
 - JavaScript pre-request and test scripts (`pm` API); `zapi-cli run` for CI with JSON / JUnit reports.
 - Import: cURL (bash / cmd), `fetch()`, Postman, OpenAPI. Export: Zapi JSON, Postman v2.1, history, full backup.
 - Themes: System, Dark, Light, Midnight, High contrast, with accent colours and editor font size.
+- Dropdown lists (HTTP method and other selectors) highlight the row under the pointer, each method keeps its own colour, and the light theme's popup background and hover/selection colours are fixed and contrast-tested.
+- The "secret in body or script" and "unresolved variable" hints are worded more clearly and hide themselves after 20 seconds (they return only if the problem changes).
+- Copy buttons turn green with a tick and "Copied" for a moment. The divider between request and response is wider, highlights on hover, and both panes can be dragged small.
 - History is grouped by day (Today, Yesterday, weekday, date), newest first. The Variables tab in the sidebar and each environment editor now have a search (by name or value; secret values are never matched).
 - Variables: hover a `{{variable}}` to see its value and scope (secrets masked); typing `{{` (or Ctrl+Space) lists existing variables, filtered as you type, in the URL, headers, params, body, auth and bulk-edit fields.
 - Bulk Edit for Headers, Params and form-urlencoded bodies (also WebSocket / SSE / gRPC headers): paste a block of `Key: Value`

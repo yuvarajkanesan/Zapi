@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, 
                                QTableWidget, QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
 
 from . import grpc_client, protocols, store, theme, variable_assist, variables
-from .widgets import CodeEditor, KVEditor, KVTable, Worker, flat, pretty_json, primary
+from .widgets import CodeEditor, KVEditor, KVTable, Worker, copy_text, flat, pretty_json, primary
 
 
 def _esc(s):
@@ -177,8 +177,8 @@ class MessageLog(QWidget):
         self.filter.setFixedWidth(200)
         self.filter.textChanged.connect(self._render)
         copy_btn = QPushButton("Copy")
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(
-            "\n".join(f"[{t}] {d} {x}" for t, d, x, _k in self.entries)))
+        copy_btn.clicked.connect(lambda: copy_text(
+            "\n".join(f"[{t}] {d} {x}" for t, d, x, _k in self.entries), copy_btn))
         clear = QPushButton("Clear")
         clear.clicked.connect(self.clear)
         row.addWidget(title)
@@ -302,8 +302,11 @@ class StreamView(ProtoBase):
 
         split = QSplitter(Qt.Vertical)
         split.setChildrenCollapsible(False)
-        split.addWidget(self._build_options())
+        opts = self._build_options()
+        opts.setMinimumHeight(110)
+        split.addWidget(opts)
         self.log = MessageLog()
+        self.log.setMinimumHeight(110)
         split.addWidget(self.log)
         split.setSizes([260, 320])
         lay.addWidget(split, 1)
@@ -828,7 +831,7 @@ class GrpcView(ProtoBase):
         self.time_lb = QLabel("")
         self.time_lb.setObjectName("muted")
         copy_btn = QPushButton("Copy")
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.response.toPlainText()))
+        copy_btn.clicked.connect(lambda: copy_text(self.response.toPlainText(), copy_btn))
         head.addWidget(title)
         head.addWidget(self.pill)
         head.addWidget(self.time_lb)

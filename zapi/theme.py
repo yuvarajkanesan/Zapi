@@ -18,13 +18,13 @@ PALETTES = {
     "Dark": _DARK,
     "Midnight": {**_DARK, "BG": "#0a0f1e", "PANEL": "#0f1730", "PANEL2": "#151f3f", "FIELD": "#0b1228",
                  "BORDER": "#1b2749", "BORDER2": "#26345f", "TEXT": "#e6ecff", "MUTED": "#8f9bc2",
-                 "FAINT": "#5a6690", "HOVER": "#131d3b", "SELECTED": "#1b2850", "MENU_SEL": "#223261",
+                 "FAINT": "#5a6690", "HOVER": "#131d3b", "SELECTED": "#1b2850", "MENU_SEL": "#202d5b",
                  "BTN_HOVER": "#1c2a52", "LINE_HL": "#111a36", "BLUE": "#6aa5ff", "RED": "#ff6b81"},
     "Light": dict(
         IS_DARK=False, BG="#f6f7f9", PANEL="#ffffff", PANEL2="#eef0f4", FIELD="#ffffff", BORDER="#dfe3ea",
-        BORDER2="#c9cfda", TEXT="#1b2030", MUTED="#5d667a", FAINT="#98a1b3", GREEN="#12894f", RED="#d6334a",
-        BLUE="#2467d8", PURPLE="#7a4fd1", ORANGE="#c4620a", HOVER="#eceff4", SELECTED="#e3e8f1",
-        MENU_SEL="#e3e8f1", BTN_HOVER="#e4e8ef", LINE_HL="#f0f3f8", SYN_STRING="#1a7f4b", SYN_KEY="#1f5fc4",
+        BORDER2="#c9cfda", TEXT="#1b2030", MUTED="#566074", FAINT="#98a1b3", GREEN="#12894f", RED="#d6334a",
+        BLUE="#2467d8", PURPLE="#7a4fd1", ORANGE="#c4620a", HOVER="#e6eaf2", SELECTED="#dae1f1",
+        MENU_SEL="#dae1f1", BTN_HOVER="#dfe4ed", LINE_HL="#f0f3f8", SYN_STRING="#1a7f4b", SYN_KEY="#1f5fc4",
         SYN_NUMBER="#a8570a", SYN_LITERAL="#8a3fc4", M_WS="#0a7f92", M_SSE="#b8346f", M_GRPC="#1b7f75",
         M_SOAP="#8c3aa6"),
     "High contrast": {**_DARK, "BG": "#000000", "PANEL": "#0a0a0a", "PANEL2": "#141414", "FIELD": "#000000",
@@ -240,6 +240,11 @@ def icon(name, color=None, size=18):
     elif name == "copy":
         p.drawRoundedRect(QRectF(s * .34, s * .34, s * .46, s * .46), s * .06, s * .06)
         p.drawPath(_corner(s))
+    elif name == "check":
+        t = QPainterPath(); t.moveTo(s * .22, s * .53); t.lineTo(s * .42, s * .72); t.lineTo(s * .79, s * .3)
+        pen.setWidthF(s * .11)
+        p.setPen(pen)
+        p.drawPath(t)
     elif name == "code":
         a = QPainterPath(); a.moveTo(s * .38, s * .3); a.lineTo(s * .18, s * .5); a.lineTo(s * .38, s * .7)
         b = QPainterPath(); b.moveTo(s * .62, s * .3); b.lineTo(s * .82, s * .5); b.lineTo(s * .62, s * .7)
@@ -540,6 +545,10 @@ QComboBox::drop-down {{ border: none; width: 22px; }}
 QComboBox::down-arrow {{ image: url({chev}); width: 14px; height: 14px; }}
 QComboBox QAbstractItemView {{ background: {PANEL2}; border: 1px solid {BORDER2}; selection-background-color: {MENU_SEL};
   selection-color: {TEXT}; padding: 3px; outline: 0; }}
+QComboBox QFrame {{ background: {PANEL2}; border: none; }}
+QComboBox QAbstractItemView::item {{ padding: 6px 10px; min-height: 20px; border-radius: 4px; }}
+QComboBox QAbstractItemView::item:selected {{ background: {SELECTED}; }}
+QComboBox QAbstractItemView::item:hover {{ background: {MENU_SEL}; }}
 QComboBox#methodBox {{ border: none; border-radius: 0; background: {PANEL2}; font-family: "{mono_family()}"; font-weight: 700; padding-left: 16px; min-width: 70px; }}
 QComboBox#envBox {{ border-radius: 6px; padding: 4px 26px 4px 10px; min-height: 16px; }}
 
@@ -586,9 +595,11 @@ QScrollBar::handle:horizontal {{ background: {BORDER2}; border-radius: 4px; min-
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
-QSplitter::handle {{ background: {BORDER}; }}
-QSplitter::handle:vertical {{ height: 1px; }}
-QSplitter::handle:horizontal {{ width: 1px; }}
+QSplitter::handle {{ background: transparent; }}
+QSplitter::handle:vertical {{ height: 9px; background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 transparent, stop:0.44 transparent, stop:0.45 {BORDER}, stop:0.55 {BORDER}, stop:0.56 transparent, stop:1 transparent); }}
+QSplitter::handle:horizontal {{ width: 9px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 transparent, stop:0.44 transparent, stop:0.45 {BORDER}, stop:0.55 {BORDER}, stop:0.56 transparent, stop:1 transparent); }}
+QSplitter::handle:vertical:hover, QSplitter::handle:vertical:pressed {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 transparent, stop:0.3 transparent, stop:0.31 {ACCENT}, stop:0.69 {ACCENT}, stop:0.7 transparent, stop:1 transparent); }}
+QSplitter::handle:horizontal:hover, QSplitter::handle:horizontal:pressed {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 transparent, stop:0.3 transparent, stop:0.31 {ACCENT}, stop:0.69 {ACCENT}, stop:0.7 transparent, stop:1 transparent); }}
 QListWidget#varPopup {{ background: {PANEL2}; border: 1px solid {BORDER2}; border-radius: 6px; padding: 3px; outline: 0; }}
 QListWidget#varPopup::item {{ border-radius: 4px; padding: 0; }}
 QMenu {{ background: {PANEL2}; border: 1px solid {BORDER2}; padding: 4px; border-radius: 6px; }}
