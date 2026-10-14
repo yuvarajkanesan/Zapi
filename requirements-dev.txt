@@ -1,0 +1,4 @@
+-r requirements.txt
+pyinstaller>=6
+pillow>=10        # only to generate the installer artwork
+pyflakes

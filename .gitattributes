@@ -1,0 +1,11 @@
+* text=auto eol=lf
+# Windows-only scripts and installer sources keep CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+*.wsb text eol=crlf
+# binaries
+*.png binary
+*.bmp binary
+*.ico binary
+*.ttf binary

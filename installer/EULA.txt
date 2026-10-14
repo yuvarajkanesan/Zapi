@@ -1,0 +1,48 @@
+ZAPI - END USER LICENSE AGREEMENT
+
+Please read this agreement before installing. By choosing "I accept the agreement" you agree to these terms.
+
+1. LICENSE
+Zapi is free and open source software published by Lavati Softwares. You may use, copy, modify, merge,
+publish, distribute, sublicense and sell copies of it under the MIT License reproduced below.
+
+2. NO WARRANTY, LIMITATION OF LIABILITY
+The software is provided "as is", without warranty of any kind. Zapi sends the requests you write to the servers you
+choose, and those requests can create, change or delete data on them. You are responsible for what you send and for
+keeping backups of anything important. To the maximum extent permitted by law, Lavati Softwares is not liable for any
+loss of data or any other damages arising from use of the software.
+
+3. NETWORK AND PRIVACY
+Zapi does not collect telemetry and needs no account. Your collections, environments and history are stored on this
+computer only. The program connects only to the servers named in the requests you send. Passwords, tokens, API keys and
+variables you mark as secret are encrypted with Windows (DPAPI) in your local workspace file, so only your Windows
+account on this computer can read them. Exports and backups you create yourself are your responsibility.
+
+4. THIRD-PARTY COMPONENTS
+The program includes open source components that keep their own licenses: Qt and PySide6 (LGPL v3) and Python (PSF
+License). The LGPL components are shipped as separate, replaceable libraries inside the installation folder. The
+IBM Plex Sans and JetBrains Mono fonts are licensed under the SIL Open Font License.
+
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2026 Lavati Softwares
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

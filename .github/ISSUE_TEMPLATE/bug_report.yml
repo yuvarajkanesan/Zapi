@@ -1,0 +1,52 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing the Zapi preview. **Please do not paste real tokens, passwords, internal URLs or customer data.**
+        Replace them with placeholders before you submit.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what did you see instead? Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a request to ...
+        2. Set auth to ...
+        3. Press Send
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic info
+      description: In Zapi open the My Workspace menu (top left) and choose "Copy diagnostic info", then paste it here. It contains the version, Windows version and a few settings, and no requests or secrets.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Crash log (only if Zapi showed an error dialog)
+      description: Menu → "Open logs folder", open the newest crash-*.log, **read it and remove anything private**, then paste it.
+      render: text
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [HTTP requests, Authentication, Scripts and tests, Runner / CLI, WebSocket / SSE / MQTT / gRPC, Mock server, Import / export, Environments and variables, Themes and UI, Installer / updates, Other]
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before you submit
+      options:
+        - label: I removed secrets and private data from everything above
+          required: true

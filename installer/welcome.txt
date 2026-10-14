@@ -1,0 +1,5 @@
+Zapi is free and open source software (MIT license). It is a fast, local-first API client: build and send HTTP requests, organise them in collections, switch between environments, and inspect responses.
+
+Everything stays on this computer and no account is needed. Nothing else has to be installed first.
+
+If Zapi is already installed, this setup updates it and keeps your collections and settings.

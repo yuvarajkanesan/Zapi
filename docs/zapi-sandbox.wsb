@@ -1,0 +1,27 @@
+<!-- Windows Sandbox: a disposable clean Windows that runs the installer smoke test. Needs Windows 10/11 Pro or Enterprise
+     with the "Windows Sandbox" feature turned on. Edit the three host paths, then double-click this file.
+     The report appears in the ZapiResults folder on your desktop; closing the Sandbox window throws everything away. -->
+<Configuration>
+  <VGpu>Disable</VGpu>
+  <Networking>Enable</Networking>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>D:\WindowsApp\Zapi\dist</HostFolder>
+      <SandboxFolder>C:\ZapiDist</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>D:\WindowsApp\Zapi\tools</HostFolder>
+      <SandboxFolder>C:\ZapiTools</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>C:\Users\Public\Desktop\ZapiResults</HostFolder>
+      <SandboxFolder>C:\ZapiResults</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell -ExecutionPolicy Bypass -NoExit -File C:\ZapiTools\smoke_installed.ps1 -Installer C:\ZapiDist\Zapi-Setup.exe -CleanMachine -Report C:\ZapiResults\report.md</Command>
+  </LogonCommand>
+</Configuration>

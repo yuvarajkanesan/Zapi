@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest something Zapi should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the task or problem first, not the solution. What do you do today instead?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How important is it for you?
+      options: [Nice to have, I would use it weekly, I cannot use Zapi without it]
