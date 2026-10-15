@@ -486,3 +486,26 @@ class PopupThemeTests(unittest.TestCase):
         finally:
             theme.apply("Dark")
             app.setStyleSheet(theme.qss())
+
+
+class MenuThemeTests(unittest.TestCase):
+    def test_menus_get_the_active_theme_whatever_their_parent_looks_like(self):
+        from PySide6.QtWidgets import QMenu, QWidget
+        theme.install_titlebar_filter(app)
+        try:
+            for name in theme.PALETTES:
+                theme.apply(name)
+                app.setStyleSheet(theme.qss())
+                parent = QWidget()
+                parent.setStyleSheet("QWidget { color: red; }")                     # a styled parent used to hide the menu background
+                m = QMenu(parent)
+                m.addAction("Open")
+                m.popup(parent.mapToGlobal(parent.rect().center()))
+                app.processEvents()
+                self.assertIn(theme.PANEL2, m.styleSheet(), name)
+                self.assertIn(theme.MENU_SEL, m.styleSheet(), name)
+                m.close()
+                parent.deleteLater()
+        finally:
+            theme.apply("Dark")
+            app.setStyleSheet(theme.qss())

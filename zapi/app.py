@@ -174,7 +174,9 @@ class MainWindow(QMainWindow):
         self._restore_tabs()
         self._update_empty_state()
         self._init_network_indicator()
-        if ws.secret_failures:
+        if ws.unreadable:
+            QTimer.singleShot(400, self._warn_unreadable_workspace)
+        elif ws.secret_failures:
             QTimer.singleShot(400, self._warn_unreadable_secrets)
 
     # ---- construction ---------------------------------------------------------------
@@ -961,6 +963,18 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction("Clear", self.console.clear)
         m.exec(self.console.viewport().mapToGlobal(pos))
+
+    def _warn_unreadable_workspace(self):
+        info, self.ws.unreadable = self.ws.unreadable, None
+        if info and isValid(self):
+            nl = chr(10) * 2
+            where = f"{nl}Your original file was kept as:{chr(10)}{info['copy']}" if info["copy"] else ""
+            QMessageBox.warning(
+                self, "Your workspace could not be opened",
+                f"{info['reason']}{nl}The workspace file is encrypted for the Windows account and computer that saved "
+                "it. Zapi started with an empty workspace instead. To get your data back, open Zapi under the original "
+                "account on the original computer, or import a full workspace backup (Export → Full workspace backup, "
+                f"made with a passphrase).{where}")
 
     def _warn_unreadable_secrets(self):
         n, self.ws.secret_failures = self.ws.secret_failures, 0

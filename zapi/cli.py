@@ -89,6 +89,10 @@ def main(argv):
     if argv[0] in ("-v", "--version"):
         print(f"{APP_NAME} {VERSION}")
         return 0
+    if argv[0] == "--data-dir":                      # where this copy keeps its workspace (portable builds: beside the exe)
+        from . import config
+        print(config.data_dir())
+        return 0
     try:
         args = _parser().parse_args(argv)
     except SystemExit:

@@ -1,10 +1,11 @@
 """The workspace: collections, environments, globals, history and settings, saved as one JSON file."""
 import copy
+import json
 import os
 import time
 import uuid
 
-from . import config, variables, vault
+from . import config, variables, vault, wsfile
 
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 HISTORY_LIMIT = 200
@@ -129,11 +130,12 @@ class Workspace:
                          "follow_redirects": True, "timeout": 30, "open_tabs": [], "active_tab": 0,
                          "encrypt_secrets": True}
         self.secret_failures = 0              # secrets in the file that this Windows account could not decrypt
+        self.unreadable = None                # set when the whole file could not be opened (see _read)
         self.load()
 
     # ---- persistence -------------------------------------------------------
     def load(self):
-        data = config.load_json(self.path, {})
+        data = self._read()
         data, self.secret_failures = vault.reveal_workspace(data)      # no-op for a plain-text (older) file
         self.collections = [self._fix_collection(c) for c in data.get("collections", [])]
         self.environments = data.get("environments", [])
@@ -141,14 +143,41 @@ class Workspace:
         self.history = data.get("history", [])
         self.settings.update(data.get("settings", {}))
 
+    def _read(self):
+        """The saved workspace as a dict. A packed file this account cannot open is copied aside (never overwritten
+        silently) and Zapi starts empty, with `unreadable` describing what happened."""
+        try:
+            with open(self.path, "rb") as f:
+                raw = f.read()
+        except OSError:
+            return {}
+        if wsfile.is_packed(raw):
+            try:
+                return wsfile.unpack(raw)
+            except wsfile.WorkspaceFileError as e:
+                import shutil
+                keep = f"{self.path}.unreadable-{time.strftime('%Y%m%d-%H%M%S')}"
+                try:
+                    shutil.copy2(self.path, keep)
+                except OSError:
+                    keep = ""
+                self.unreadable = {"reason": str(e), "copy": keep}
+                return {}
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return {}
+
     def save(self):
         payload = {
             "version": 1, "collections": self.collections, "environments": self.environments,
             "globals": self.globals, "history": self.history[:HISTORY_LIMIT], "settings": self.settings,
         }
         if self.settings.get("encrypt_secrets", True) and vault.available():
-            payload = vault.protect_workspace(payload)       # secrets are encrypted on disk, plain in memory
-        config.save_json(self.path, payload)
+            # everything is compressed and encrypted for this Windows user; secret fields are additionally encrypted
+            config.save_bytes(self.path, wsfile.pack(vault.protect_workspace(payload)))
+        else:
+            config.save_json(self.path, payload)
 
     def secrets_encrypted(self):
         return bool(self.settings.get("encrypt_secrets", True)) and vault.available()

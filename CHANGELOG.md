@@ -7,6 +7,9 @@
 - JavaScript pre-request and test scripts (`pm` API); `zapi-cli run` for CI with JSON / JUnit reports.
 - Import: cURL (bash / cmd), `fetch()`, Postman, OpenAPI. Export: Zapi JSON, Postman v2.1, history, full backup.
 - Themes: System, Dark, Light, Midnight, High contrast, with accent colours and editor font size.
+- The whole workspace file is now compressed (zlib) and encrypted with Windows DPAPI, not only the secret fields; credentials are still encrypted a second time inside. Older plain files are read and upgraded on the next save. A file that cannot be opened (another account or computer) is copied aside untouched and Zapi tells you, instead of silently starting empty. The "looks like a secret" warning under the URL bar is gone because it is no longer needed.
+- Right-click menus (History, collections, tabs) always use the active theme; they could appear black when opened from some panels.
+- Portable edition: `make_portable.bat` builds a single file, `dist\Zapi-Portable.exe` (no installer, no admin rights). It keeps the workspace, logs and caches in a `ZapiData` folder next to the exe. A `portable.txt` beside any Zapi exe also switches it to portable mode. `zapi-cli.exe --data-dir` shows where a copy keeps its data.
 - Request tabs: the method badge no longer touches the tab edge or the neighbouring tab (and OPTIONS / PATCH show as OPT / PAT).
 - form-data rows of type `file` get a Choose file button inside the field (and the chooser opens as soon as you pick `file`).
 - Menus and dropdown lists no longer show a black backdrop (the title-bar styling is applied only to real windows and dialogs; dropdown lists get an explicit background).

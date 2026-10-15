@@ -24,7 +24,7 @@ python -m unittest discover -s tests -t .
 | **Other protocols** | WebSocket, Server-Sent Events, MQTT 3.1.1 (QoS 0-2), gRPC (through server reflection: unary, server / client / bidirectional streaming), SOAP |
 | **Network** | Proxy (system / none / custom), client certificate, custom CA bundle, redirects, SSL verify, timeout; cookie manager |
 | **Organise** | Collections with nested folders (drag and drop to move), tabs that restore on restart, history, search |
-| **Security** | Secrets are encrypted on disk with Windows DPAPI (tied to your Windows account): variables marked Secret or named like one, every auth field, hand-typed `Authorization` / `Cookie` / `X-API-Key` headers and `token` / `password` params and form fields, URLs with `?token=` or `user:pass@`, and scripts or bodies that contain a hard-coded credential (the editor warns you). Shared exports leave credentials out. Full backups are protected with a passphrase (scrypt, authenticated) so they can move between computers |
+| **Security** | Your whole workspace file (collections, requests, environments, history, settings) is compressed and encrypted on disk with Windows DPAPI, tied to your Windows account, and credentials are encrypted a second time inside it: variables marked Secret or named like one, every auth field, hand-typed `Authorization` / `Cookie` / `X-API-Key` headers and `token` / `password` params and form fields, URLs with `?token=` or `user:pass@`, and scripts or bodies that contain a hard-coded credential. Shared exports leave credentials out. Full backups are protected with a passphrase (scrypt, authenticated) so they can move between computers |
 | **Variables** | `{{name}}` everywhere; Globals, collection and environment scopes; Initial vs Current values; secrets masked and never exported; dynamic `{{$guid}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}` |
 | **Scripts** | JavaScript pre-request and test scripts with a `pm` API (`pm.test`, `pm.expect`, `pm.response`, `pm.request`, `pm.environment / globals / collectionVariables / variables`, `pm.iterationData`, `postman.setNextRequest`, `CryptoJS` hashes / HMAC, `console`). Runs in a helper process with a 10 s limit |
 | **Runner** | Run a collection or folder with iterations, CSV / JSON data files, delay, stop-on-failure; export JSON / JUnit |
@@ -45,6 +45,13 @@ Not included: anything that needs a hosted service (team workspaces, sync, comme
 `build.bat` generates the icon and installer artwork (`tools/make_assets.py`), builds `dist\Zapi\` with PyInstaller (`Zapi.spec`: `Zapi.exe`
 plus the console `zapi-cli.exe`), trims unused Qt parts, runs the packaged `--selftest`, and compiles `installer.iss` with Inno Setup into
 `dist\Zapi-Setup.exe`. The installer can add `zapi-cli` to your PATH.
+
+`make_portable.bat` builds the portable edition as **one file**, `dist\Zapi-Portable.exe` (`ZapiPortable.spec`): copy it anywhere and
+run it, with no installer, no admin rights and no registry entries. It keeps your workspace, logs and caches in a `ZapiData` folder next to
+the exe. A one-file exe unpacks itself to a temporary folder at every start (about two seconds) and removes it on exit. The script
+verifies the real file with the packaged self-test and checks where it stores its data. The workspace is encrypted per Windows user, so
+the `ZapiData` folder does not open on another PC or account (Zapi keeps a copy of the file and tells you; use an encrypted passphrase
+export to move your data). The console runner `zapi-cli.exe` is part of the installer build only.
 
 The installer wizard uses Lavati Softwares branding; the app and its icon use Zapi's own amber bolt.
 

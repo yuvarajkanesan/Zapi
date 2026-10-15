@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 
 from shiboken6 import isValid
 
-from . import curl, http_client, oauth2, store, theme, variable_assist, variables, vault
+from . import curl, http_client, oauth2, store, theme, variable_assist, variables
 from .widgets import (CodeEditor, CopyTable, KVEditor, KVTable, Worker, copy_text, flat, pretty_json, pretty_xml,
                       primary)
 
@@ -884,17 +884,8 @@ class RequestView(QWidget):
             self._advise("Unresolved variable" + ("s" if len(missing) > 1 else "") + ": " + ", ".join(missing) +
                          ". Select an environment or define them under Variables.")
             return
-        risky = [name for name, text in (("pre-request script", r["scripts"]["pre"]), ("tests", r["scripts"]["test"]),
-                                         ("body", r["body"]["raw"])) if vault.contains_secret_literal(text)]
-        if risky:
-            plural = len(risky) > 1
-            self._advise("The " + " and ".join(risky) + (" contain" if plural else " contains") +
-                         " a value that appears to be a secret. It is encrypted on disk and omitted from shared "
-                         "exports. For stronger protection, store it as a Secret variable and reference it as "
-                         "{{name}} (or pm.environment.get('name') in scripts).")
-        else:
-            self._warn_dismissed = None
-            self.warn.hide()
+        self._warn_dismissed = None
+        self.warn.hide()
 
     WARN_SECONDS = 20
 

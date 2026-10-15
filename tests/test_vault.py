@@ -7,7 +7,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["ZAPI_HOME"] = tempfile.mkdtemp(prefix="zapi-test-")
 
-from zapi import exporters, store, vault  # noqa: E402
+from zapi import exporters, store, vault, wsfile  # noqa: E402
 
 SECRETS = ["s3cret-env-initial", "s3cret-env-current", "pw-basic-9x", "tok-bearer-7q", "oauth-client-secret-1",
            "refresh-token-2", "aws-secret-key-3", "hawk-key-4", "mqtt-pass-5", "apikey-value-6",
@@ -60,7 +60,7 @@ class VaultTests(unittest.TestCase):
     def test_file_on_disk_contains_no_secrets_but_loads_back_exactly(self):
         ws = build()
         ws.save()
-        raw = open(ws.path, encoding="utf-8").read()
+        raw = wsfile.read_text(ws.path)
         for secret in SECRETS:
             self.assertNotIn(secret, raw, secret)
         for kept in ("alice", "https://shop.example/users", "https://prod.example.com", "Prod", "{{token}}", "{{ pw }}",
@@ -82,30 +82,30 @@ class VaultTests(unittest.TestCase):
         e = ws.add_environment("E")
         e["vars"] += [store.new_var("open", "visible-value"), store.new_var("hidden", "hide-me", secret=True)]
         ws.save()
-        raw = open(ws.path, encoding="utf-8").read()
+        raw = wsfile.read_text(ws.path)
         self.assertIn("visible-value", raw)
         self.assertNotIn("hide-me", raw)
         e["vars"][1]["secret"] = False                          # un-marking a secret writes it as plain text again
         ws.save()
-        self.assertIn("hide-me", open(ws.path, encoding="utf-8").read())
+        self.assertIn("hide-me", wsfile.read_text(ws.path))
 
     def test_old_plain_text_files_are_migrated_on_the_next_save(self):
         ws = build()
         ws.settings["encrypt_secrets"] = False
         ws.save()
-        raw = open(ws.path, encoding="utf-8").read()
+        raw = wsfile.read_text(ws.path)
         self.assertIn("pw-basic-9x", raw)                       # the old, unencrypted format
         loaded = store.Workspace(ws.path)
         self.assertEqual(loaded.collections[0]["items"][0]["auth"]["password"], "pw-basic-9x")
         loaded.settings["encrypt_secrets"] = True
         loaded.save()
-        self.assertNotIn("pw-basic-9x", open(ws.path, encoding="utf-8").read())
+        self.assertNotIn("pw-basic-9x", wsfile.read_text(ws.path))
         self.assertEqual(store.Workspace(ws.path).collections[0]["items"][0]["auth"]["password"], "pw-basic-9x")
 
     def test_unreadable_secrets_become_empty_and_are_counted(self):
         ws = build()
         ws.save()
-        data = json.load(open(ws.path, encoding="utf-8"))
+        data = json.loads(wsfile.read_text(ws.path))
         item = data["collections"][0]["items"][0]
         item["auth"]["password"] = "dpapi:" + "AAAA" * 8                # as if saved by another Windows account
         data["environments"][0]["vars"][0]["current"] = "dpapi:not-base64!!"
@@ -143,22 +143,25 @@ class FallbackTests(unittest.TestCase):
             ws = build()
             self.assertFalse(ws.secrets_encrypted())
             ws.save()
-            self.assertIn("pw-basic-9x", open(ws.path, encoding="utf-8").read())
+            self.assertIn("pw-basic-9x", wsfile.read_text(ws.path))
             self.assertEqual(store.Workspace(ws.path).secret_failures, 0)
         finally:
             vault.available = real
 
-    def test_encrypted_file_opened_where_dpapi_is_missing_fails_cleanly(self):
+    def test_encrypted_file_opened_where_dpapi_is_missing_is_kept_and_not_overwritten(self):
         if not real_available():
             self.skipTest("needs Windows to create the file")
         ws = build()
         ws.save()
+        before = open(ws.path, "rb").read()
         real = vault.available
         vault.available = lambda: False
         try:
             loaded = store.Workspace(ws.path)
-            self.assertGreaterEqual(loaded.secret_failures, len(SECRETS) - 1)
-            self.assertEqual(loaded.collections[0]["items"][0]["auth"]["password"], "")
+            self.assertIsNotNone(loaded.unreadable)
+            self.assertEqual(loaded.collections, [])
+            self.assertTrue(os.path.isfile(loaded.unreadable["copy"]))                  # nothing is lost
+            self.assertEqual(open(loaded.unreadable["copy"], "rb").read(), before)
         finally:
             vault.available = real
 

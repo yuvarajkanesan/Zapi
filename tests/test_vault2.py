@@ -10,7 +10,7 @@ os.environ["ZAPI_HOME"] = tempfile.mkdtemp(prefix="zapi-test-")
 
 from PySide6.QtWidgets import QApplication, QDialogButtonBox  # noqa: E402
 
-from zapi import curl, importers, store, theme, vault  # noqa: E402
+from zapi import curl, importers, store, theme, vault, wsfile  # noqa: E402
 
 app = QApplication.instance() or QApplication([])
 theme.load_fonts()
@@ -53,7 +53,7 @@ class HandTypedSecretTests(unittest.TestCase):
     def test_everything_sensitive_is_encrypted_on_disk_and_comes_back_exactly(self):
         ws, _ = workspace_with(tricky_request())
         ws.save()
-        raw = open(ws.path, encoding="utf-8").read()
+        raw = wsfile.read_text(ws.path)
         for secret in REAL:
             self.assertNotIn(secret, raw, secret)
         for readable in ("visible-trace-id", "{{token}}", "{{hint}}", "alice", "C:/secret/file.bin", "https://prod.example.com",
@@ -68,7 +68,7 @@ class HandTypedSecretTests(unittest.TestCase):
         r = tricky_request()
         ws, c = workspace_with(r)
         ws.save()
-        raw = open(ws.path, encoding="utf-8").read()
+        raw = wsfile.read_text(ws.path)
         self.assertIn("pm.test('ok'", raw)                              # the tests script has no credential
         self.assertNotIn("apiSecret", raw)                              # the pre-request script does: unreadable
         loaded = store.Workspace(ws.path)
@@ -80,7 +80,7 @@ class HandTypedSecretTests(unittest.TestCase):
         ws.add_history(r, 200, 5, 5)
         ws.settings["open_tabs"] = [{"req": copy.deepcopy(r), "cid": c["id"], "persisted": False, "clean": True}]
         ws.save()
-        raw = open(ws.path, encoding="utf-8").read()
+        raw = wsfile.read_text(ws.path)
         for secret in REAL:
             self.assertNotIn(secret, raw, secret)
         again = store.Workspace(ws.path)
@@ -339,49 +339,13 @@ class UiFlowTests(unittest.TestCase):
         self.assertTrue(ok(e))
         self.assertTrue(e.second.isHidden())
 
-    def test_editor_warns_about_secret_literals(self):
+    def test_no_secret_warning_is_shown_because_everything_is_encrypted(self):
         from zapi.request_view import RequestView
         v = RequestView(tricky_request(), values_provider=lambda cid: {"token": "t", "hint": "h"})
+        v.show()
         v._check_variables()
-        self.assertIn("pre-request script", v.warn.text())
-        self.assertIn("body", v.warn.text())
-        self.assertIn("encrypted on disk", v.warn.text())
-        clean = RequestView(store.new_request(url="http://x"), values_provider=lambda cid: {})
-        clean._check_variables()
-        self.assertTrue(clean.warn.isHidden())
+        self.assertFalse(v.warn.isVisible())                            # the whole workspace file is encrypted: no hint needed
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class WarningBehaviourTests(unittest.TestCase):
-    def test_secret_warning_is_worded_properly_and_hides_itself(self):
-        from PySide6.QtTest import QTest
-        from zapi.request_view import RequestView
-        RequestView.WARN_SECONDS = 0.1
-        try:
-            v = RequestView(tricky_request(), values_provider=lambda cid: {"token": "t", "hint": "h"})
-            v.show()
-            v._check_variables()
-            text = v.warn.text()
-            self.assertIn("appears to be a secret", text)
-            self.assertNotIn("what looks like", text)
-            self.assertIn("contain a value", text)                      # two places: plural
-            self.assertTrue(v.warn.isVisible())
-            QTest.qWait(400)
-            self.assertFalse(v.warn.isVisible())
-            v._check_variables()                                        # editing elsewhere must not bring it straight back
-            self.assertFalse(v.warn.isVisible())
-            v.req["scripts"]["pre"] = v.req["scripts"]["test"] = ""
-            v.req["body"]["raw"] = "plain"
-            v.script_pre.setPlainText("")
-            v.script_test.setPlainText("")
-            v.raw.setPlainText("plain")
-            v._check_variables()                                        # problem fixed ...
-            v.raw.setPlainText('{"password": "hunter2hunter2"}')
-            v._check_variables()                                        # ... and back again: warn again
-            self.assertTrue(v.warn.isVisible())
-            self.assertIn("body contains", v.warn.text())
-        finally:
-            del RequestView.WARN_SECONDS

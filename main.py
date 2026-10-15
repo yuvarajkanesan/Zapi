@@ -118,8 +118,11 @@ def selftest():
         e = ws.add_environment("E")
         e["vars"].append(store.new_var("t", "top-secret-value", secret=True))
         ws.save()
-        raw = open(ws.path, encoding="utf-8").read()
-        assert "top-secret-value" not in raw and "dpapi:" in raw, "the workspace file is not encrypted"
+        from zapi import wsfile
+        raw = open(ws.path, "rb").read()
+        assert wsfile.is_packed(raw) and b"top-secret-value" not in raw and b"collections" not in raw,             "the workspace file is not compressed and encrypted"
+        inner = wsfile.unpack_text(raw)
+        assert "top-secret-value" not in inner and "dpapi:" in inner, "secret fields are not encrypted inside the file"
         assert store.Workspace(ws.path).environments[0]["vars"][0]["current"] == "top-secret-value"
 
     def encrypted_backup():
@@ -247,6 +250,11 @@ def main(argv):
     if "--script-worker" in args:
         from zapi import scripting
         return scripting.worker_main()
+    if "--data-dir-to" in args:                       # writes where this copy keeps its data (a windowed exe has no console)
+        from zapi import config
+        with open(args[args.index("--data-dir-to") + 1], "w", encoding="utf-8") as f:
+            f.write(config.data_dir())
+        return 0
     if "--version" in args:
         print(f"{APP_NAME} {VERSION}")
         return 0

@@ -171,6 +171,19 @@ def protect(text):
     return token
 
 
+def protect_bytes(data):
+    """DPAPI-encrypt raw bytes for this Windows user (used for the whole workspace file)."""
+    if not available():
+        raise VaultError("Encryption needs Windows.")
+    return _call("protect", data)
+
+
+def unprotect_bytes(data):
+    if not available():
+        raise VaultError("Decryption needs Windows.")
+    return _call("unprotect", data)
+
+
 def unprotect(token):
     if not token.startswith(PREFIX):
         return token

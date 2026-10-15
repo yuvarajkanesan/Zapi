@@ -28,8 +28,8 @@ tests, and run it all from the command line. Everything stays on your computer: 
 
 ## Your data and privacy
 - Zapi talks only to the addresses you enter. No telemetry, no accounts, no update pings.
-- Passwords, tokens, API keys, variables marked Secret and similar credentials are **encrypted on disk with Windows (DPAPI)**:
-  they open only for your Windows user on this computer. See `SECURITY.md` for exactly what is and is not protected.
+- Your whole workspace is **compressed and encrypted on disk with Windows (DPAPI)**, and credentials are encrypted again inside it:
+  it opens only for your Windows user on this computer. See `SECURITY.md` for exactly what is and is not protected.
 - Crash reports are written to `%APPDATA%\Zapi\logs` and are never sent. You choose whether to attach one to a bug report.
 
 ## Known limitations

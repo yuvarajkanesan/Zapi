@@ -637,13 +637,25 @@ def set_titlebar(widget):
         pass
 
 
+def menu_qss():
+    """Complete menu styling for the active theme (set on each menu as it opens, so no parent style can hide it)."""
+    return (f"QMenu {{ background: {PANEL2}; color: {TEXT}; border: 1px solid {BORDER2}; padding: 4px; border-radius: 6px; }} "
+            f"QMenu::item {{ padding: 6px 22px 6px 14px; border-radius: 4px; background: transparent; }} "
+            f"QMenu::item:selected {{ background: {MENU_SEL}; color: {TEXT}; }} "
+            f"QMenu::item:disabled {{ color: {FAINT}; }} "
+            f"QMenu::separator {{ height: 1px; background: {BORDER}; margin: 4px 6px; }}")
+
+
 def install_titlebar_filter(app):
     """Style every top-level window (main window and dialogs) as it is shown."""
     from PySide6.QtCore import QEvent, QObject
-    from PySide6.QtWidgets import QComboBox, QWidget
+    from PySide6.QtWidgets import QComboBox, QMenu, QWidget
 
     class Filter(QObject):
         def eventFilter(self, obj, event):
+            if event.type() == QEvent.Show and isinstance(obj, QMenu) and not obj.property("_popupStyled"):
+                obj.setProperty("_popupStyled", True)        # menus opened from styled widgets otherwise lose the background
+                obj.setStyleSheet(menu_qss())
             if event.type() == QEvent.Show and isinstance(obj, QComboBox) and not obj.property("_popupStyled"):
                 obj.setProperty("_popupStyled", True)        # the dropdown list otherwise shows a black backdrop on Windows
                 obj.view().setStyleSheet(

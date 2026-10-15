@@ -2,13 +2,14 @@
 import platform
 import sys
 
-from . import APP_NAME, VERSION, theme, vault
+from . import APP_NAME, VERSION, config, theme, vault
 
 
 def info(ws=None):
     """A short plain-text block to paste into a bug report."""
     lines = [
-        f"{APP_NAME} {VERSION}" + (" (installed build)" if getattr(sys, "frozen", False) else " (from source)"),
+        f"{APP_NAME} {VERSION}" + (" (portable build)" if config.portable_dir() else " (installed build)" if getattr(sys, "frozen", False)
+                                    else " (from source)"),
         f"Windows: {platform.platform()}",
         f"Python {sys.version.split()[0]}",
     ]
@@ -30,7 +31,7 @@ def info(ws=None):
         s = ws.settings
         lines.append(f"Collections: {len(ws.collections)}, environments: {len(ws.environments)}, "
                      f"history: {len(ws.history)}")
-        lines.append(f"Secrets encrypted: {'yes' if ws.secrets_encrypted() else 'no'}"
+        lines.append(f"Workspace compressed and encrypted: {'yes' if ws.secrets_encrypted() else 'no'}"
                      f"{'' if vault.available() else ' (not available on this system)'}")
         proxy = s.get("proxy", "")
         lines.append("Proxy: " + ("system" if not proxy else "none" if proxy == "none" else "custom"))

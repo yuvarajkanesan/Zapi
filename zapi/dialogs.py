@@ -273,15 +273,16 @@ class SettingsDialog(QDialog):
             row.addWidget(browse)
             form.addRow({"cert": "Client certificate", "key": "Client key", "ca": "CA bundle"}[
                 "cert" if edit_ is self.cert else "key" if edit_ is self.key else "ca"], row)
-        self.encrypt = QCheckBox("Encrypt secrets in my workspace file")
+        self.encrypt = QCheckBox("Compress and encrypt my workspace file")
         self.encrypt.setChecked(bool(s.get("encrypt_secrets", True)) and vault.available())
         self.encrypt.setEnabled(vault.available())
         form.addRow("Security", self.encrypt)
         enc_note = QLabel(
-            "Passwords, tokens, API keys and variables marked Secret are encrypted with Windows (DPAPI) before they "
-            "are written to disk. They only open under your Windows account on this computer, so to move them to "
-            "another machine use Export → Full workspace backup." if vault.available() else
-            "Secret encryption is only available on Windows; secrets are stored as plain text here.")
+            "Everything (requests, collections, environments, history and settings) is compressed and encrypted with "
+            "Windows (DPAPI) before it is written to disk, and credentials are encrypted a second time inside it. "
+            "It only opens under your Windows account on this computer, so to move your data to another machine use "
+            "Export → Full workspace backup with a passphrase." if vault.available() else
+            "Encryption is only available on Windows; the workspace is stored as plain text here.")
         enc_note.setObjectName("muted")
         enc_note.setWordWrap(True)
         form.addRow(enc_note)

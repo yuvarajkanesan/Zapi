@@ -171,3 +171,91 @@ class InstallerScriptTests(unittest.TestCase):
 
     def test_path_cleanup_matches_whole_entries_only(self):
         self.assertIn("Padded := ';' + Paths + ';'", self.iss)
+
+
+class PortableModeTests(unittest.TestCase):
+    def test_marker_next_to_a_frozen_exe_moves_the_data_folder(self):
+        import sys
+        import tempfile
+        from zapi import config
+        folder = tempfile.mkdtemp()
+        exe = os.path.join(folder, "Zapi.exe")
+        old_home, old_frozen, old_exe = os.environ.pop("ZAPI_HOME", None), getattr(sys, "frozen", None), sys.executable
+        try:
+            sys.frozen, sys.executable = True, exe
+            self.assertIsNone(config.portable_dir())                                  # no marker: normal install
+            with open(os.path.join(folder, "portable.txt"), "w") as f:
+                f.write("x")
+            self.assertEqual(config.portable_dir(), folder)
+            self.assertEqual(config.data_dir(), os.path.join(folder, "ZapiData"))
+            self.assertTrue(os.path.isdir(os.path.join(folder, "ZapiData")))
+            os.environ["ZAPI_HOME"] = os.path.join(folder, "elsewhere")               # an explicit override still wins
+            self.assertEqual(config.data_dir(), os.path.join(folder, "elsewhere"))
+            from zapi import diagnostics
+            self.assertIn("portable build", diagnostics.info())
+        finally:
+            sys.executable = old_exe
+            if old_frozen is None:
+                del sys.frozen
+            else:
+                sys.frozen = old_frozen
+            os.environ.pop("ZAPI_HOME", None)
+            if old_home is not None:
+                os.environ["ZAPI_HOME"] = old_home
+
+    def test_running_from_source_is_never_portable(self):
+        from zapi import config
+        self.assertIsNone(config.portable_dir())
+
+    def test_cli_reports_the_data_folder(self):
+        import io
+        from contextlib import redirect_stdout
+        from zapi import cli, config
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.assertEqual(cli.main(["--data-dir"]), 0)
+        self.assertEqual(buf.getvalue().strip(), config.data_dir())
+
+
+class SingleFilePortableTests(unittest.TestCase):
+    def test_exe_named_zapi_portable_is_portable_without_any_marker(self):
+        import sys
+        import tempfile
+        from zapi import config
+        folder = tempfile.mkdtemp()
+        old_home, old_frozen, old_exe = os.environ.pop("ZAPI_HOME", None), getattr(sys, "frozen", None), sys.executable
+        try:
+            sys.frozen = True
+            sys.executable = os.path.join(folder, "Zapi.exe")
+            self.assertIsNone(config.portable_dir())                                  # the installed app is not portable
+            sys.executable = os.path.join(folder, "Zapi-Portable.exe")
+            self.assertEqual(config.portable_dir(), folder)
+            self.assertEqual(config.data_dir(), os.path.join(folder, "ZapiData"))
+            sys.executable = os.path.join(folder, "ZAPI-PORTABLE-0.2.exe")            # renamed / versioned copies too
+            self.assertEqual(config.portable_dir(), folder)
+        finally:
+            sys.executable = old_exe
+            if old_frozen is None:
+                del sys.frozen
+            else:
+                sys.frozen = old_frozen
+            if old_home is not None:
+                os.environ["ZAPI_HOME"] = old_home
+
+    def test_trim_list_filters_what_build_bat_deletes_and_keeps_what_is_needed(self):
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+        import trim
+        for gone in ("PySide6\Qt6Quick.dll", "PySide6/qml/QtQuick/x.qml", "PySide6/plugins/tls/qschannelbackend.dll",
+                     "api-ms-win-core-file-l1-1-0.dll", "ucrtbase.dll", "PySide6\Qt6WebEngineCore.dll"):
+            self.assertFalse(trim.wanted(gone), gone)
+        for kept in ("PySide6\Qt6Core.dll", "PySide6\Qt6Widgets.dll", "PySide6\Qt6Qml.dll",
+                     "PySide6\plugins\platforms\qwindows.dll", "libssl-3.dll", "libcrypto-3.dll", "python314.dll",
+                     "fonts\IBMPlexSans-Regular.ttf"):
+            self.assertTrue(trim.wanted(kept), kept)
+        # the patterns must be the same ones build.bat deletes, so the two builds stay equal
+        bat = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build.bat"),
+                   encoding="utf-8").read().lower()
+        for pat in ("qt6quick*.dll", "qt6webengine*.dll", "libssl-3-x64.dll", "qdirect2d.dll", "qt6test*.dll"):
+            self.assertIn(pat, bat)
+            self.assertTrue(any(pat in p for p in trim.PATTERNS), pat)
