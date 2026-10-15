@@ -419,9 +419,12 @@ class MainWindow(QMainWindow):
     def _decorate_tab(self, i, view):
         r = view.req
         badge = store.badge(r)
-        m = QLabel(badge[:4] if badge != "DELETE" else "DEL")
+        m = QLabel({"DELETE": "DEL", "OPTIONS": "OPT", "PATCH": "PAT"}.get(badge, badge[:4]))
+        m.setMinimumWidth(34)
+        # padding keeps the badge off the tab edge and the neighbouring tab's close button
         m.setStyleSheet(f"color: {theme.method_color(badge)}; font-family: '{theme.mono_family()}'; "
-                        "font-size: 7.5pt; font-weight: 700; background: transparent; border: none;")
+                        "font-size: 7.5pt; font-weight: 700; background: transparent; border: none; "
+                        "padding-left: 12px; padding-right: 2px;")
         self.tab_bar.setTabButton(i, QTabBar.LeftSide, m)
         dirty = view.is_dirty() or not view.persisted
         name = view.title()

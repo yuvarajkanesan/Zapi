@@ -556,7 +556,7 @@ QTabBar {{ background: transparent; }}
 QTabBar::tab {{ background: transparent; color: {MUTED}; padding: 9px 16px; border: none; border-bottom: 2px solid transparent; }}
 QTabBar::tab:hover {{ color: {TEXT}; }}
 QTabBar::tab:selected {{ color: {TEXT}; border-bottom: 2px solid {ACCENT}; }}
-QTabBar#reqTabs::tab {{ background: {PANEL}; border-right: 1px solid {BORDER}; padding: 10px 14px; border-bottom: 2px solid transparent; }}
+QTabBar#reqTabs::tab {{ background: {PANEL}; border-right: 1px solid {BORDER}; padding: 10px 14px 10px 2px; border-bottom: 2px solid transparent; }}
 QTabBar#reqTabs::tab:selected {{ background: {BG}; border-bottom: 2px solid {ACCENT}; }}
 QTabWidget::pane {{ border: none; border-top: 1px solid {BORDER}; }}
 
@@ -640,11 +640,17 @@ def set_titlebar(widget):
 def install_titlebar_filter(app):
     """Style every top-level window (main window and dialogs) as it is shown."""
     from PySide6.QtCore import QEvent, QObject
-    from PySide6.QtWidgets import QWidget
+    from PySide6.QtWidgets import QComboBox, QWidget
 
     class Filter(QObject):
         def eventFilter(self, obj, event):
-            if event.type() == QEvent.Show and isinstance(obj, QWidget) and obj.isWindow():
+            if event.type() == QEvent.Show and isinstance(obj, QComboBox) and not obj.property("_popupStyled"):
+                obj.setProperty("_popupStyled", True)        # the dropdown list otherwise shows a black backdrop on Windows
+                obj.view().setStyleSheet(
+                    f"QAbstractItemView {{ background: {PANEL2}; border: 1px solid {BORDER2}; outline: 0; padding: 3px; "
+                    f"selection-background-color: {SELECTED}; selection-color: {TEXT}; }}")
+            if (event.type() == QEvent.Show and isinstance(obj, QWidget) and obj.isWindow()
+                    and obj.windowType() in (Qt.Window, Qt.Dialog)):          # not menus, dropdown lists or tooltips
                 set_titlebar(obj)
             return False
     f = Filter(app)

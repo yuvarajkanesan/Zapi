@@ -380,3 +380,109 @@ class CopyFeedbackTests(unittest.TestCase):
         b.deleteLater()
         app.processEvents()
         widgets.copy_feedback(None)
+
+
+class FormDataFileTests(unittest.TestCase):
+    def setUp(self):
+        from zapi import widgets
+        self.widgets = widgets
+        self.real = widgets.QFileDialog.getOpenFileName
+        self.picked = []
+        self.path = os.path.join(tempfile.mkdtemp(), "photo.png")
+        with open(self.path, "wb") as f:
+            f.write(b"PNGDATA")
+        widgets.QFileDialog.getOpenFileName = lambda *a, **k: (self.picked.append(1) or self.path, "")
+
+    def tearDown(self):
+        self.widgets.QFileDialog.getOpenFileName = self.real
+
+    def table(self):
+        t = self.widgets.KVTable(with_type=True)
+        t.show()
+        return t
+
+    def test_choosing_type_file_opens_the_chooser_and_fills_the_path(self):
+        t = self.table()
+        self.assertTrue(t.cellWidget(0, 2).placeholderText() == "Value")
+        combo = t.cellWidget(0, 3)
+        combo.setCurrentIndex(1)
+        combo.activated.emit(1)                                              # what a click on "file" does
+        self.assertEqual(self.picked, [1])
+        self.assertEqual(t.cellWidget(0, 2).text(), self.path)
+        self.assertEqual(t.cellWidget(0, 2).placeholderText(), "Choose a file…")
+        t.cellWidget(0, 1).setText("avatar")
+        row = [r for r in t.rows() if r["type"] == "file"][0]
+        self.assertEqual(row["value"], self.path)
+
+    def test_folder_button_in_the_field_reopens_it_and_only_shows_for_files(self):
+        t = self.table()
+        val = t.cellWidget(0, 2)
+        act = val.property("chooseAction")
+        self.assertFalse(act.isVisible())                                    # text rows have no chooser
+        t.cellWidget(0, 3).setCurrentIndex(1)
+        self.assertTrue(act.isVisible())
+        self.assertEqual(self.picked, [])                                    # a programmatic change does not pop a dialog
+        act.trigger()
+        self.assertEqual(val.text(), self.path)
+        t.cellWidget(0, 3).setCurrentIndex(0)
+        self.assertFalse(act.isVisible())
+
+    def test_cancelling_leaves_the_value_alone_and_the_file_is_uploaded(self):
+        from zapi import http_client
+        t = self.table()
+        self.widgets.QFileDialog.getOpenFileName = lambda *a, **k: ("", "")
+        t.cellWidget(0, 3).setCurrentIndex(1)
+        t.cellWidget(0, 3).activated.emit(1)
+        self.assertEqual(t.cellWidget(0, 2).text(), "")
+        t.cellWidget(0, 2).setText(self.path)
+        t.cellWidget(0, 1).setText("avatar")
+        req = store.new_request(method="POST", url="http://x/")
+        req["body"]["mode"] = "form-data"
+        req["body"]["form"] = t.rows()
+        data, ctype = http_client.build_body(req, {})
+        self.assertIn(b'filename="photo.png"', data)
+        self.assertIn(b"PNGDATA", data)
+        self.assertTrue(ctype.startswith("multipart/form-data"))
+
+    def test_loaded_file_rows_do_not_open_a_dialog(self):
+        t = self.widgets.KVTable(with_type=True)
+        t.set_rows([{"key": "f", "value": self.path, "enabled": True, "type": "file"}])
+        self.assertEqual(self.picked, [])
+        self.assertEqual(t.cellWidget(0, 2).text(), self.path)
+
+
+class PopupWindowTests(unittest.TestCase):
+    def test_popup_windows_are_left_alone_and_combo_lists_get_a_background(self):
+        from PySide6.QtWidgets import QComboBox
+        theme.install_titlebar_filter(app)
+        c = QComboBox()
+        c.addItems(["a", "b"])
+        c.show()
+        app.processEvents()
+        self.assertIn(theme.PANEL2, c.view().styleSheet())
+        c.deleteLater()
+
+
+class PopupThemeTests(unittest.TestCase):
+    def test_dropdown_lists_follow_every_theme(self):
+        from PySide6.QtWidgets import QComboBox
+        theme.install_titlebar_filter(app)
+        try:
+            for name in theme.PALETTES:
+                theme.apply(name)
+                app.setStyleSheet(theme.qss())
+                c = QComboBox()
+                c.addItems(["a", "b"])
+                c.show()
+                app.processEvents()
+                self.assertIn(theme.PANEL2, c.view().styleSheet(), name)
+                self.assertIn(theme.SELECTED, c.view().styleSheet(), name)
+                rv = RequestView(store.new_request(url=""))
+                sheet = rv.method.styleSheet()
+                self.assertIn(theme.PANEL2, sheet, name)                       # the method list too
+                self.assertIn(theme.method_color("GET"), sheet, name)
+                c.deleteLater()
+                rv.deleteLater()
+        finally:
+            theme.apply("Dark")
+            app.setStyleSheet(theme.qss())

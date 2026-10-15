@@ -7,6 +7,9 @@
 - JavaScript pre-request and test scripts (`pm` API); `zapi-cli run` for CI with JSON / JUnit reports.
 - Import: cURL (bash / cmd), `fetch()`, Postman, OpenAPI. Export: Zapi JSON, Postman v2.1, history, full backup.
 - Themes: System, Dark, Light, Midnight, High contrast, with accent colours and editor font size.
+- Request tabs: the method badge no longer touches the tab edge or the neighbouring tab (and OPTIONS / PATCH show as OPT / PAT).
+- form-data rows of type `file` get a Choose file button inside the field (and the chooser opens as soon as you pick `file`).
+- Menus and dropdown lists no longer show a black backdrop (the title-bar styling is applied only to real windows and dialogs; dropdown lists get an explicit background).
 - Dropdown lists (HTTP method and other selectors) highlight the row under the pointer, each method keeps its own colour, and the light theme's popup background and hover/selection colours are fixed and contrast-tested.
 - The "secret in body or script" and "unresolved variable" hints are worded more clearly and hide themselves after 20 seconds (they return only if the problem changes).
 - Copy buttons turn green with a tick and "Copied" for a moment. The divider between request and response is wider, highlights on hover, and both panes can be dragged small.

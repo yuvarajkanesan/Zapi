@@ -1,12 +1,13 @@
 """Reusable widgets: code editor with line numbers, JSON/XML colouring, key/value tables."""
 import json
+import os
 import re
 
 from PySide6.QtCore import QRect, QRegularExpression, QSize, QThread, Qt, Signal
 from PySide6.QtGui import (QColor, QFont, QFontMetrics, QKeySequence, QPainter, QSyntaxHighlighter, QTextCharFormat,
                            QTextFormat)
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QHBoxLayout, QHeaderView, QLabel,
-                               QLineEdit, QPlainTextEdit, QPushButton, QStackedWidget, QTableWidget, QTextEdit,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QHeaderView,
+                               QLabel, QLineEdit, QPlainTextEdit, QPushButton, QStackedWidget, QTableWidget, QTextEdit,
                                QToolButton, QVBoxLayout, QWidget)
 
 from . import store, theme, variable_assist
@@ -331,7 +332,28 @@ class KVTable(QTableWidget):
             if r and r.get("type") == "file":
                 combo.setCurrentText("file")
             self.setCellWidget(i, 3, combo)
+            choose = val.addAction(theme.icon("folder", theme.MUTED, 16), QLineEdit.TrailingPosition)
+            choose.setToolTip("Choose a file to upload")
+            val.setProperty("chooseAction", choose)
+
+            def sync(*_, val=val, combo=combo, choose=choose):
+                is_file = combo.currentText() == "file"
+                choose.setVisible(is_file)
+                val.setPlaceholderText("Choose a file…" if is_file else self.value_hint)
+
+            def pick(*_, val=val):
+                start = val.text() if os.path.isfile(val.text()) else os.path.expanduser("~")
+                path, _ = QFileDialog.getOpenFileName(self, "Choose a file to upload", start)
+                if path:
+                    val.setText(path)
+                    val.setCursorPosition(0)
+                    self._edited()
+                return bool(path)
+            choose.triggered.connect(pick)
+            combo.currentIndexChanged.connect(sync)
+            combo.activated.connect(lambda *_: combo.currentText() == "file" and not val.text() and pick())   # picked by the user
             combo.currentIndexChanged.connect(lambda *_: self._edited())
+            sync()
         rm = QToolButton()
         rm.setIcon(theme.icon("close", theme.MUTED, 14))
         rm.setToolTip("Remove row")
