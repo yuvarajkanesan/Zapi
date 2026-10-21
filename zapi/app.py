@@ -200,6 +200,7 @@ class MainWindow(QMainWindow):
         self.sidebar.newRequest.connect(self.new_request)
         self.sidebar.runCollection.connect(self.open_runner)
         self.sidebar.loadTest.connect(self.open_load_test)
+        self.sidebar.settingsRequested.connect(self.open_collection_settings)
         self.sidebar.exportRequested.connect(self.export_what)
         self.sidebar.copied.connect(self._flash)
         self.sidebar.newCollection.connect(self.new_collection)
@@ -398,7 +399,8 @@ class MainWindow(QMainWindow):
         elif kind == "grpc":
             view = GrpcView(req, collection_id, self.ws.variable_values, self._settings_for_views)
         else:
-            view = RequestView(req, collection_id, values_provider=self.ws.variable_values)
+            view = RequestView(req, collection_id, values_provider=self.ws.variable_values,
+                               request_resolver=self.ws.effective_request, parents_info=self.ws.parents_info)
         view.persisted = persisted
         c = self.ws.collection(collection_id)
         view.collection_name = c["name"] if c else ""
@@ -737,7 +739,8 @@ class MainWindow(QMainWindow):
         before = self.ws.scopes(view.collection_id)
         opts = self.ws.request_options()
         view.set_busy(True)
-        t = SendThread(copy.deepcopy(req), before, opts, self.jar, {"iteration": 0, "iterationCount": 1}, self)
+        sent = self.ws.effective_request(req, view.collection_id)       # collection / folder auth, headers and scripts added
+        t = SendThread(sent, before, opts, self.jar, {"iteration": 0, "iterationCount": 1}, self)
         self.threads[id(view)] = t
         t.done.connect(lambda out, v=view, r=req, b=before, th=t: self._sent(v, r, b, out, th))
         t.start()
@@ -803,7 +806,7 @@ class MainWindow(QMainWindow):
 
     def show_code(self, view):
         values = self.ws.variable_values(view.collection_id)
-        CodeDialog(view.collect(), values, self).exec()
+        CodeDialog(self.ws.effective_request(view.collect(), view.collection_id), values, self).exec()
 
     # ---- environments / workspace ------------------------------------------------------------------
     def refresh_environment_box(self):
@@ -920,6 +923,16 @@ class MainWindow(QMainWindow):
             fresh.show()
         self.close()
 
+    def open_collection_settings(self, collection_id, folder=""):
+        from .collection_settings import CollectionSettingsDialog
+        if self.ws.collection(collection_id) is None:
+            return
+        if CollectionSettingsDialog(self.ws, collection_id, folder, self).exec():
+            self.sidebar.refresh()
+            for v in self.views():
+                v.refresh_variables()                          # the notes on the Authorization / Headers / Script tabs
+            self._flash("Saved collection settings" if not folder else "Saved folder settings")
+
     def open_devtools(self, tab="jwt", text=""):
         from .devtools_view import DevToolsDialog
         DevToolsDialog(self, tab, text).exec()
@@ -953,6 +966,8 @@ class MainWindow(QMainWindow):
             entries.append({"title": e["name"], "subtitle": "Switch environment" + ("  (active)" if e["id"] == active else ""),
                             "kind": "environment", "run": lambda eid=e["id"]: self.set_active_environment(eid)})
         for c in self.ws.collections:
+            entries.append({"title": f"Collection settings: {c['name']}", "subtitle": "Authorization, headers and scripts its requests inherit",
+                            "kind": "command", "run": lambda cid=c["id"]: self.open_collection_settings(cid)})
             for r in c["items"]:
                 where = c["name"] + (" / " + r["folder"] if r.get("folder") else "")
                 entries.append({"title": r["name"], "subtitle": f"{where}  ·  {r['method']} {r['url']}"[:140],

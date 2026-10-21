@@ -232,7 +232,10 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(c["items"][0]["folder"], "Folder")
         self.assertEqual(c["folders"], ["Folder"])
         self.assertEqual(c["items"][0]["params"][1]["key"], "y")
-        self.assertEqual(c["items"][0]["auth"]["token"], "tt")
+        self.assertEqual(c["auth"]["token"], "tt")                                   # kept on the collection ...
+        self.assertEqual(c["items"][0]["auth"]["type"], "inherit")                  # ... and inherited by its requests
+        from zapi import inherit
+        self.assertEqual(inherit.effective(c, c["items"][0])["auth"]["token"], "tt")
         self.assertEqual(c["items"][1]["body"]["raw_type"], "JSON")
         self.assertEqual(c["variables"][0]["key"], "host")
 

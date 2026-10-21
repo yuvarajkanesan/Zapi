@@ -239,8 +239,18 @@ def _walk_request(req, fn):
         req["url"] = fn(req["url"], "url")
 
 
+def _walk_settings(coll, fn):
+    """The authorization, headers and scripts set on a collection and on its folders."""
+    if not isinstance(coll, dict):
+        return
+    _walk_request(coll, fn)                      # reads only auth / headers / scripts (a collection has no url or body)
+    for s in (coll.get("folder_settings") or {}).values():
+        _walk_request(s, fn)
+
+
 def _walk(data, fn):
     for c in data.get("collections", []) or []:
+        _walk_settings(c, fn)
         for r in c.get("items", []) or []:
             _walk_request(r, fn)
     for h in data.get("history", []) or []:
@@ -308,6 +318,7 @@ def strip_request(req):
 
 def strip_collection(coll):
     out = copy.deepcopy(coll)
+    _walk_settings(out, _strip_one)
     for r in out.get("items", []):
         _walk_request(r, _strip_one)
     return out

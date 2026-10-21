@@ -92,6 +92,7 @@ class Sidebar(QWidget):
     manageEnvironments = Signal()
     runCollection = Signal(str, str)      # collection id, folder path
     loadTest = Signal(str, str)           # collection id, folder path
+    settingsRequested = Signal(str, str)  # collection id, folder path: auth / headers / scripts the requests inherit
     exportRequested = Signal(str)         # collections | environments | history | workspace
     copied = Signal(str)                  # status message after a copy action
     workspaceChanged = Signal()
@@ -100,7 +101,7 @@ class Sidebar(QWidget):
         super().__init__(parent)
         self.ws = ws
         self.setObjectName("sidebar")
-        self.setMinimumWidth(220)
+        self.setMinimumWidth(262)         # narrower and the tab bar scrolls and the buttons clip
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -399,6 +400,7 @@ class Sidebar(QWidget):
             m.addSeparator()
             m.addAction("Rename", lambda: self._rename_collection(c))
             m.addAction("Variables…", lambda: self._collection_variables(c))
+            m.addAction("Settings: auth, headers, scripts…", lambda: self.settingsRequested.emit(ident, ""))
             ex = m.addMenu("Export")
             ex.addAction("Zapi JSON…", lambda: self._export_collection(c, "zapi"))
             ex.addAction("Postman collection v2.1…", lambda: self._export_collection(c, "postman"))
@@ -409,6 +411,7 @@ class Sidebar(QWidget):
             m.addAction("New subfolder…", lambda: self._new_folder(cid, ident))
             m.addAction("Run folder…", lambda: self.runCollection.emit(cid, ident))
             m.addAction("Load test…", lambda: self.loadTest.emit(cid, ident))
+            m.addAction("Settings: auth, headers, scripts…", lambda: self.settingsRequested.emit(cid, ident))
             m.addSeparator()
             m.addAction("Rename", lambda: self._rename_folder(cid, ident))
             m.addAction("Delete", lambda: self._delete_folder(cid, ident))
@@ -434,6 +437,7 @@ class Sidebar(QWidget):
     def copy_request_text(self, req, what, collection_id=""):
         """Put a request's URL (variables filled in from the active environment) or its cURL command on the clipboard."""
         values = self.ws.variable_values(collection_id)
+        req = self.ws.effective_request(req, collection_id)             # include what the collection / folder adds
         try:
             text = curl.generate(req, values, "cURL") if what == "curl" else http_client.build_url(req, values) \
                 if req.get("kind", "http") in ("http", "soap") else req.get("url", "")

@@ -6,7 +6,7 @@ import time
 import xml.sax.saxutils as xml_escape
 from dataclasses import dataclass, field
 
-from . import executor, http_client
+from . import executor, http_client, inherit
 
 MAX_REQUESTS = 10000
 
@@ -117,7 +117,7 @@ def run_collection(collection, scopes, opts, iterations=1, data=None, delay_ms=0
                 summary.stopped = True
                 break
             req = items[i]
-            out = executor.execute(req, scopes, opts, jar=jar, iteration_data=row,
+            out = executor.execute(inherit.effective(collection, req), scopes, opts, jar=jar, iteration_data=row,
                                    info={"iteration": it, "iterationCount": count})
             executed += 1
             scopes = out.scopes

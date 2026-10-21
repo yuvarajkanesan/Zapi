@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 
 from shiboken6 import isValid
 
-from . import curl, http_client, jsonpath, oauth2, store, theme, variable_assist, variables
+from . import curl, http_client, inherit, jsonpath, oauth2, store, theme, variable_assist, variables
 from .widgets import (CodeEditor, CopyTable, KVEditor, KVTable, Worker, copy_text, flat, pretty_json, pretty_xml,
                       primary)
 
@@ -39,7 +39,7 @@ SNIPPETS = {
 }
 
 # Authorization forms: (key, label, hint, kind) with kind text | secret | [(value, label), ...]
-AUTH_TYPES = [("none", "No auth"), ("bearer", "Bearer token"), ("basic", "Basic auth"), ("digest", "Digest auth"),
+AUTH_TYPES = [("inherit", "Inherit auth from parent"), ("none", "No auth"), ("bearer", "Bearer token"), ("basic", "Basic auth"), ("digest", "Digest auth"),
               ("apikey", "API key"), ("oauth1", "OAuth 1.0"), ("oauth2", "OAuth 2.0"), ("aws", "AWS Signature"),
               ("hawk", "Hawk"), ("ntlm", "NTLM")]
 AUTH_FORMS = {
@@ -134,13 +134,16 @@ class RequestView(QWidget):
     changed = Signal(object)
     pasteImport = Signal(object, str)      # (view, pasted text): cURL / fetch() / API file in the URL bar
 
-    def __init__(self, request, collection_id="", values_provider=None, parent=None):
+    def __init__(self, request, collection_id="", values_provider=None, parent=None, request_resolver=None,
+                 parents_info=None):
         super().__init__(parent)
         self.req = store.normalize_request(request)
         self.collection_id = collection_id
         self.collection_name = ""
         self.persisted = False
         self.values_provider = values_provider or (lambda cid: {})
+        self.request_resolver = request_resolver or (lambda r, cid: inherit.effective(None, r))
+        self.parents_info = parents_info or (lambda r, cid: {"auth": "", "headers": "", "pre": "", "test": ""})
         self.response = None
         self.exec_result = None
         self._loading = True
@@ -244,14 +247,22 @@ class RequestView(QWidget):
         self.headers = KVEditor(KVTable(key_hint="Header", value_hint="Value"), "header")
         self.params.changed.connect(self._params_changed)
         self.headers.changed.connect(self._headers_changed)
+        hbox = QWidget()
+        hl = QVBoxLayout(hbox)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(4)
+        self.headers_note = QLabel("")
+        self.headers_note.setObjectName("muted")
+        self.headers_note.setWordWrap(True)
+        self.headers_note.hide()
+        hl.addWidget(self.headers_note)
+        hl.addWidget(self.headers, 1)
         self.rstack.addWidget(self.params)
         self.rstack.addWidget(self._build_auth())
-        self.rstack.addWidget(self.headers)
+        self.rstack.addWidget(hbox)
         self.rstack.addWidget(self._build_body())
-        self.rstack.addWidget(self._build_script("pre"))
-        self.rstack.addWidget(self._build_script("test"))
-        self.rtabs = _TabStrip(["Params", "Authorization", "Headers", "Body", "Pre-request Script", "Tests"],
-                               self.rstack)
+        self.rstack.addWidget(self._build_scripts())
+        self.rtabs = _TabStrip(["Params", "Authorization", "Headers", "Body", "Scripts"], self.rstack)
         self.rtabs.bar.setCurrentIndex(0)
         lay.addWidget(self.rtabs)
         line = QFrame()
@@ -261,22 +272,66 @@ class RequestView(QWidget):
         lay.addWidget(self.rstack, 1)
         return box
 
+    def _build_scripts(self):
+        """One Scripts tab like Postman's: a Pre-request / Post-response switch above the two editors."""
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 8, 0, 0)
+        lay.setSpacing(0)
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        self.script_group = QButtonGroup(self)
+        self.script_btns = {}
+        for i, (which, label) in enumerate((("pre", "Pre-request"), ("test", "Post-response"))):
+            b = QPushButton(label)
+            b.setCheckable(True)
+            b.setChecked(i == 0)
+            b.setStyleSheet(
+                f"QPushButton {{ padding: 4px 12px; border-radius: 5px; background: transparent; border: none; color: {theme.MUTED}; }}"
+                f"QPushButton:checked {{ background: {theme.BORDER2}; color: {theme.TEXT}; }}"
+                f"QPushButton:hover {{ color: {theme.TEXT}; }}")
+            self.script_group.addButton(b, i)
+            self.script_btns[which] = b
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.script_stack = QStackedWidget()
+        self.script_stack.addWidget(self._build_script("pre"))
+        self.script_stack.addWidget(self._build_script("test"))
+        self.script_group.idClicked.connect(self.script_stack.setCurrentIndex)
+        lay.addWidget(self.script_stack, 1)
+        return w
+
+    def show_script(self, which):
+        """Open the Scripts tab on the Pre-request or Post-response editor."""
+        self.rtabs.bar.setCurrentIndex(4)
+        self.script_btns[which].setChecked(True)
+        self.script_stack.setCurrentIndex(0 if which == "pre" else 1)
+
     def _build_script(self, which):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(0, 8, 0, 0)
         lay.setSpacing(6)
         row = QHBoxLayout()
-        hint = QLabel("Runs before the request is sent." if which == "pre" else
-                      "Runs after the response arrives. Use pm.test() and pm.expect().")
+        hint = QLabel("These scripts run before the request is sent." if which == "pre" else
+                      "These scripts run after the response arrives. Use pm.test() and pm.expect().")
         hint.setObjectName("muted")
         row.addWidget(hint, 1)
+        note = QLabel("")
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        note.hide()
+        if not hasattr(self, "script_notes"):
+            self.script_notes = {}
+        self.script_notes[which] = note
         snip = QComboBox()
         snip.addItem("Snippets…")
         for title, _code in SNIPPETS[which]:
             snip.addItem(title)
         row.addWidget(snip)
         lay.addLayout(row)
+        lay.addWidget(note)
         ed = CodeEditor()
         ed.set_language("js")
         ed.setPlaceholderText("// JavaScript. pm.environment.set('x', 1); console.log(pm.response.json());")
@@ -337,6 +392,11 @@ class RequestView(QWidget):
                     self.auth_widgets[(key, k)] = wdg
                     form.addRow(_label(text, "muted"), wdg)
                 pl.addLayout(form)
+            if key == "inherit":
+                self.inherit_note = QLabel("")
+                self.inherit_note.setObjectName("muted")
+                self.inherit_note.setWordWrap(True)
+                pl.addWidget(self.inherit_note)
             if key in AUTH_NOTES:
                 note = QLabel(AUTH_NOTES[key])
                 note.setObjectName("muted")
@@ -583,9 +643,9 @@ class RequestView(QWidget):
             return r.raw_text()
         values = self.values_provider(self.collection_id)
         if what == "curl":
-            return curl.generate(self.collect(), values, "cURL")
+            return curl.generate(self.request_resolver(self.collect(), self.collection_id), values, "cURL")
         if what == "url":
-            return http_client.build_url(self.collect(), values)
+            return http_client.build_url(self.request_resolver(self.collect(), self.collection_id), values)
         return None
 
     def copy_what(self, what):
@@ -698,6 +758,7 @@ class RequestView(QWidget):
         self._refresh_titles()
         self._style_method()
         self._loading = False
+        self._refresh_parent_notes()
 
     def collect(self):
         r = copy.deepcopy(self.req)
@@ -877,9 +938,12 @@ class RequestView(QWidget):
         self.rtabs.set_title(2, f"Headers ({n})" if n else "Headers")
         n = len([h for h in self.params.rows() if h["enabled"]])
         self.rtabs.set_title(0, f"Params ({n})" if n else "Params")
-        self.rtabs.set_title(1, "Authorization" if self.auth_type.currentData() == "none" else "Authorization •")
-        self.rtabs.set_title(4, "Pre-request Script" + (" •" if self.script_pre.toPlainText().strip() else ""))
-        self.rtabs.set_title(5, "Tests" + (" •" if self.script_test.toPlainText().strip() else ""))
+        self.rtabs.set_title(1, "Authorization" if self.auth_type.currentData() in ("none", "inherit")
+                             else "Authorization •")
+        pre, post = self.script_pre.toPlainText().strip(), self.script_test.toPlainText().strip()
+        self.rtabs.set_title(4, "Scripts" + (" •" if pre or post else ""))
+        self.script_btns["pre"].setText("Pre-request" + (" •" if pre else ""))
+        self.script_btns["test"].setText("Post-response" + (" •" if post else ""))
 
     def _check_variables(self):
         values = self.values_provider(self.collection_id)
@@ -922,7 +986,19 @@ class RequestView(QWidget):
             self.warn.hide()
 
     def refresh_variables(self):
+        self._refresh_parent_notes()
         self._check_variables()
+
+    def _refresh_parent_notes(self):
+        """What the collection / folders add to this request: auth, headers and scripts."""
+        r = self.req if self._loading else self.collect()
+        info = self.parents_info(r, self.collection_id)
+        self.inherit_note.setText(info["auth"])
+        self.headers_note.setText(info["headers"])
+        self.headers_note.setVisible(bool(info["headers"]))
+        for which in ("pre", "test"):
+            self.script_notes[which].setText(info[which])
+            self.script_notes[which].setVisible(bool(info[which]))
 
     def focus_url(self):
         self.url.setFocus()

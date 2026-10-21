@@ -1,6 +1,8 @@
 """Export to Postman collection v2.1 (round-trips through importers.from_postman_collection)."""
 import urllib.parse
 
+from . import inherit
+
 SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 _LANG = {"JSON": "json", "XML": "xml", "HTML": "html", "JavaScript": "javascript", "Text": "text",
          "SOAP 1.1": "xml", "SOAP 1.2": "xml"}
@@ -79,7 +81,7 @@ def _events(scripts):
     return out
 
 
-def _request(r):
+def _request(r, parent_has_auth=False):
     params = r.get("params", [])
     raw = r["url"]
     if params:
@@ -93,6 +95,8 @@ def _request(r):
     auth = _auth(r.get("auth", {}))
     if auth:
         req["auth"] = auth
+    elif r.get("auth", {}).get("type") == "none" and parent_has_auth:
+        req["auth"] = {"type": "noauth"}                  # explicitly none, so it does not inherit from the parent in Postman
     item = {"name": r["name"], "request": req}
     events = _events(r.get("scripts"))
     if events:
@@ -110,8 +114,15 @@ def to_postman(coll):
     the second value is how many were left out."""
     root = []
     folders = {}
+    fs = coll.get("folder_settings") or {}
     for path in sorted(coll.get("folders", [])):
         node = {"name": path.split("/")[-1], "item": []}
+        a = _auth((fs.get(path) or {}).get("auth") or {})
+        if a:
+            node["auth"] = a
+        ev = _events((fs.get(path) or {}).get("scripts"))
+        if ev:
+            node["event"] = ev
         parent = folders.get("/".join(path.split("/")[:-1]))
         (parent["item"] if parent else root).append(node)
         folders[path] = node
@@ -120,8 +131,15 @@ def to_postman(coll):
         if r.get("kind", "http") not in ("http", "soap"):
             skipped += 1
             continue
-        (folders[r["folder"]]["item"] if r.get("folder") in folders else root).append(_request(r))
+        has_auth = inherit.has_auth_above(coll, r)
+        (folders[r["folder"]]["item"] if r.get("folder") in folders else root).append(_request(r, has_auth))
     doc = {"info": {"_postman_id": coll.get("id", ""), "name": coll["name"], "schema": SCHEMA},
            "item": root, "variable": [{"key": v["key"], "value": v.get("value", "")}
                                       for v in coll.get("variables", []) if v.get("key")]}
+    top = _auth(coll.get("auth") or {})
+    if top:
+        doc["auth"] = top
+    events = _events(coll.get("scripts"))
+    if events:
+        doc["event"] = events
     return doc, skipped

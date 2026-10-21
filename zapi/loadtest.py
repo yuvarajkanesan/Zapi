@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from collections import Counter
 from dataclasses import dataclass, field
 
-from . import executor, http_client, runner, variables
+from . import executor, http_client, inherit, runner, variables
 
 MAX_VUS = 500
 MAX_DURATION_S = 3600
@@ -283,7 +283,7 @@ def format_summary(name, cfg, stats):
 
 def build_items(collection, folder=""):
     """The requests a load test cycles through (deep copies, so scripts never touch the workspace)."""
-    return [copy.deepcopy(r) for r in runner.select_requests(collection, folder)]
+    return [inherit.effective(collection, r) for r in runner.select_requests(collection, folder)]
 
 
 def hosts_of(items, values):

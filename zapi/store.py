@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 
-from . import config, variables, vault, wsfile
+from . import config, inherit, variables, vault, wsfile
 
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 HISTORY_LIMIT = 200
@@ -39,7 +39,7 @@ def new_request(name="Untitled request", method="GET", url=""):
     return {
         "id": new_id(), "name": name, "method": method, "url": url, "folder": "", "kind": "http",
         "params": [], "headers": [], "scripts": {"pre": "", "test": ""}, "proto": {}, "examples": [],
-        "auth": dict(AUTH_DEFAULTS),
+        "auth": {**AUTH_DEFAULTS, "type": "inherit"},          # like Postman: use the collection / folder authorization
         "body": {"mode": "none", "raw_type": "JSON", "raw": "", "form": [], "urlencoded": [],
                  "file": "", "query": "", "variables": ""},
     }
@@ -84,7 +84,8 @@ def new_kind_request(kind):
 
 
 def new_collection(name="New collection"):
-    return {"id": new_id(), "name": name, "items": [], "variables": [], "folders": []}
+    return {"id": new_id(), "name": name, "items": [], "variables": [], "folders": [],
+            "auth": {"type": "none"}, "headers": [], "scripts": {"pre": "", "test": ""}, "folder_settings": {}}
 
 
 def new_environment(name="New environment"):
@@ -186,6 +187,10 @@ class Workspace:
     def _fix_collection(c):
         c.setdefault("id", new_id())
         c.setdefault("variables", [])
+        c.setdefault("auth", {"type": "none"})
+        c.setdefault("headers", [])
+        c.setdefault("scripts", {"pre": "", "test": ""})
+        c.setdefault("folder_settings", {})
         c["items"] = [normalize_request(r) for r in c.get("items", [])]
         folders = [clean_folder(f) for f in c.get("folders", [])]
         for r in c["items"]:
@@ -209,6 +214,17 @@ class Workspace:
                 if r["id"] == rid:
                     return c, r
         return None, None
+
+    def effective_request(self, req, collection_id=""):
+        """`req` with the collection / folder authorization, headers and scripts filled in (see zapi/inherit.py)."""
+        return inherit.effective(self.collection(collection_id) if collection_id else None, req)
+
+    def parents_info(self, req, collection_id=""):
+        """Short notes about what the collection / folders add to `req` (for the tabs of a request)."""
+        coll = self.collection(collection_id) if collection_id else None
+        info = inherit.describe_parents(coll, req)
+        info["auth"] = inherit.describe_auth(coll, req)
+        return info
 
     def save_request(self, req, collection_id):
         """Insert or replace `req` (a deep copy is stored) in the given collection."""
@@ -252,6 +268,7 @@ class Workspace:
         def move(p):
             return new + p[len(old):] if p == old or p.startswith(old + "/") else p
         c["folders"] = sorted({move(f) for f in c["folders"]})
+        c["folder_settings"] = {move(p): s for p, s in c.get("folder_settings", {}).items()}
         for r in c["items"]:
             r["folder"] = move(r["folder"])
         for f in folder_ancestors(new):
@@ -270,6 +287,7 @@ class Workspace:
         before = len(c["items"])
         c["items"] = [r for r in c["items"] if not inside(r["folder"])]
         c["folders"] = [f for f in c["folders"] if not inside(f)]
+        c["folder_settings"] = {p: s for p, s in c.get("folder_settings", {}).items() if not inside(p)}
         return before - len(c["items"])
 
     def move_request(self, rid, folder):
@@ -487,4 +505,8 @@ class Workspace:
         if not include_secrets:
             coll = vault.strip_collection(coll)
         return {"zapi": "collection", "name": coll["name"], "variables": coll.get("variables", []),
-                "folders": list(coll.get("folders", [])), "items": copy.deepcopy(coll["items"])}
+                "folders": list(coll.get("folders", [])), "items": copy.deepcopy(coll["items"]),
+                "auth": copy.deepcopy(coll.get("auth") or {"type": "none"}),
+                "headers": copy.deepcopy(coll.get("headers") or []),
+                "scripts": copy.deepcopy(coll.get("scripts") or {"pre": "", "test": ""}),
+                "folder_settings": copy.deepcopy(coll.get("folder_settings") or {})}

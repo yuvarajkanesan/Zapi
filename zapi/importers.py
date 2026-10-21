@@ -77,6 +77,10 @@ def _zapi_collection(d):
     c = store.new_collection(d.get("name") or "Imported")
     c["variables"] = d.get("variables", [])
     c["folders"] = list(d.get("folders", []))
+    c["auth"] = d.get("auth") if isinstance(d.get("auth"), dict) and d["auth"].get("type") else {"type": "none"}
+    c["headers"] = [h for h in d.get("headers", []) if isinstance(h, dict)]
+    c["scripts"] = {"pre": "", "test": "", **(d.get("scripts") if isinstance(d.get("scripts"), dict) else {})}
+    c["folder_settings"] = {k: v for k, v in (d.get("folder_settings") or {}).items() if isinstance(v, dict)}
     c["items"] = [store.normalize_request({**r, "id": store.new_id()}) for r in d.get("items", [])]
     return Workspace_fix(c)
 
@@ -173,8 +177,9 @@ def from_postman_collection(d):
     for v in d.get("variable", []) or []:
         if v.get("key"):
             c["variables"].append(store.kv(v["key"], str(v.get("value", ""))))
-    top_auth = d.get("auth")
-    _walk(d.get("item", []), [], c, top_auth)
+    c["auth"] = _postman_auth(d.get("auth")) or {"type": "none"}
+    c["scripts"] = _postman_scripts(d.get("event"))
+    _walk(d.get("item", []), [], c, None)
     return Workspace_fix(c)
 
 
@@ -183,9 +188,17 @@ def _walk(items, path, coll, inherited_auth):
         if "item" in it:
             sub_path = path + [(it.get("name") or "Folder").replace("/", "-")]
             coll["folders"].append("/".join(sub_path))
-            _walk(it["item"], sub_path, coll, it.get("auth") or inherited_auth)
+            settings = {}
+            if _postman_auth(it.get("auth")):
+                settings["auth"] = _postman_auth(it.get("auth"))
+            sc = _postman_scripts(it.get("event"))
+            if sc["pre"] or sc["test"]:
+                settings["scripts"] = sc
+            if settings:
+                coll["folder_settings"]["/".join(sub_path)] = settings
+            _walk(it["item"], sub_path, coll, None)
         elif "request" in it:
-            req = _postman_request(it.get("name", "Request"), it["request"], it.get("auth") or inherited_auth)
+            req = _postman_request(it.get("name", "Request"), it["request"], it.get("auth"))
             req["folder"] = "/".join(path)
             _postman_events(req, it.get("event"))
             for ex in it.get("response") or []:
@@ -196,16 +209,22 @@ def _walk(items, path, coll, inherited_auth):
             coll["items"].append(req)
 
 
-def _postman_events(req, events):
+def _postman_scripts(events):
     """Postman keeps scripts as event lists; the `exec` lines are the JavaScript source."""
+    out = {"pre": "", "test": ""}
     for ev in events or []:
         script = ev.get("script") or {}
         exec_ = script.get("exec")
         code = "\n".join(exec_) if isinstance(exec_, list) else (exec_ or "")
         if ev.get("listen") == "prerequest":
-            req["scripts"]["pre"] = code
+            out["pre"] = code
         elif ev.get("listen") == "test":
-            req["scripts"]["test"] = code
+            out["test"] = code
+    return out
+
+
+def _postman_events(req, events):
+    req["scripts"].update(_postman_scripts(events))
 
 
 def _postman_url(u):
@@ -214,6 +233,58 @@ def _postman_url(u):
     if isinstance(u, dict):
         return u.get("raw") or ""
     return ""
+
+
+def _postman_auth(a):
+    """A Postman auth block -> a Zapi auth dict ('noauth' = explicitly none); None when absent or unsupported."""
+    if not isinstance(a, dict) or not a.get("type"):
+        return None
+    out = dict(store.AUTH_DEFAULTS)
+    t = a.get("type")
+
+    def field(name):
+        for e in a.get(t, []) or []:
+            if e.get("key") == name:
+                return str(e.get("value", ""))
+        return ""
+    if t == "bearer":
+        out.update({"type": "bearer", "token": field("token")})
+    elif t == "basic":
+        out.update({"type": "basic", "username": field("username"), "password": field("password")})
+    elif t == "apikey":
+        out.update({"type": "apikey", "key": field("key"), "value": field("value"),
+                            "in": field("in") or "header"})
+    elif t == "digest":
+        out.update({"type": "digest", "username": field("username"), "password": field("password")})
+    elif t == "oauth1":
+        out.update({"type": "oauth1", "consumer_key": field("consumerKey"),
+                            "consumer_secret": field("consumerSecret"), "token": field("token"),
+                            "token_secret": field("tokenSecret"),
+                            "sig_method": field("signatureMethod") or "HMAC-SHA1", "realm": field("realm")})
+    elif t == "oauth2":
+        grant = {"client_credentials": "Client credentials", "password_credentials": "Password",
+                 "authorization_code": "Authorization code (PKCE)", "authorization_code_with_pkce":
+                 "Authorization code (PKCE)"}.get(field("grant_type"), "Client credentials")
+        out.update({"type": "oauth2", "token": field("accessToken"), "o2_grant": field("grant_type")
+                            if field("grant_type") in ("Client credentials", "Password", "Authorization code (PKCE)",
+                                                       "Refresh token") else grant,
+                            "o2_token_url": field("accessTokenUrl"), "o2_auth_url": field("authUrl"),
+                            "o2_client_id": field("clientId"), "o2_client_secret": field("clientSecret"),
+                            "o2_scope": field("scope"), "o2_prefix": field("headerPrefix") or "Bearer",
+                            "o2_refresh_token": field("refreshToken")})
+    elif t == "awsv4":
+        out.update({"type": "aws", "access_key": field("accessKey"), "secret_key": field("secretKey"),
+                            "session_token": field("sessionToken"), "region": field("region") or "us-east-1",
+                            "service": field("service")})
+    elif t == "hawk":
+        out.update({"type": "hawk", "hawk_id": field("authId"), "hawk_key": field("authKey"),
+                            "hawk_algorithm": field("algorithm") or "sha256", "hawk_ext": field("ext")})
+    elif t == "ntlm":
+        out.update({"type": "ntlm", "username": field("username"), "password": field("password"),
+                            "domain": field("domain"), "workstation": field("workstation")})
+    if t == "noauth":
+        out["type"] = "none"
+    return out if out["type"] != store.AUTH_DEFAULTS["type"] or t == "noauth" else None
 
 
 def _postman_request(name, r, auth):
@@ -237,50 +308,9 @@ def _postman_request(name, r, auth):
             for p in req["params"]:
                 if p["key"] in disabled:
                     p["enabled"] = False
-    a = r.get("auth") or auth
-    if a:
-        t = a.get("type")
-
-        def field(name):
-            for e in a.get(t, []) or []:
-                if e.get("key") == name:
-                    return str(e.get("value", ""))
-            return ""
-        if t == "bearer":
-            req["auth"].update({"type": "bearer", "token": field("token")})
-        elif t == "basic":
-            req["auth"].update({"type": "basic", "username": field("username"), "password": field("password")})
-        elif t == "apikey":
-            req["auth"].update({"type": "apikey", "key": field("key"), "value": field("value"),
-                                "in": field("in") or "header"})
-        elif t == "digest":
-            req["auth"].update({"type": "digest", "username": field("username"), "password": field("password")})
-        elif t == "oauth1":
-            req["auth"].update({"type": "oauth1", "consumer_key": field("consumerKey"),
-                                "consumer_secret": field("consumerSecret"), "token": field("token"),
-                                "token_secret": field("tokenSecret"),
-                                "sig_method": field("signatureMethod") or "HMAC-SHA1", "realm": field("realm")})
-        elif t == "oauth2":
-            grant = {"client_credentials": "Client credentials", "password_credentials": "Password",
-                     "authorization_code": "Authorization code (PKCE)", "authorization_code_with_pkce":
-                     "Authorization code (PKCE)"}.get(field("grant_type"), "Client credentials")
-            req["auth"].update({"type": "oauth2", "token": field("accessToken"), "o2_grant": field("grant_type")
-                                if field("grant_type") in ("Client credentials", "Password", "Authorization code (PKCE)",
-                                                           "Refresh token") else grant,
-                                "o2_token_url": field("accessTokenUrl"), "o2_auth_url": field("authUrl"),
-                                "o2_client_id": field("clientId"), "o2_client_secret": field("clientSecret"),
-                                "o2_scope": field("scope"), "o2_prefix": field("headerPrefix") or "Bearer",
-                                "o2_refresh_token": field("refreshToken")})
-        elif t == "awsv4":
-            req["auth"].update({"type": "aws", "access_key": field("accessKey"), "secret_key": field("secretKey"),
-                                "session_token": field("sessionToken"), "region": field("region") or "us-east-1",
-                                "service": field("service")})
-        elif t == "hawk":
-            req["auth"].update({"type": "hawk", "hawk_id": field("authId"), "hawk_key": field("authKey"),
-                                "hawk_algorithm": field("algorithm") or "sha256", "hawk_ext": field("ext")})
-        elif t == "ntlm":
-            req["auth"].update({"type": "ntlm", "username": field("username"), "password": field("password"),
-                                "domain": field("domain"), "workstation": field("workstation")})
+    parsed = _postman_auth(r.get("auth") or auth)
+    if parsed:
+        req["auth"] = parsed
     b = r.get("body") or {}
     mode = b.get("mode")
     if mode == "raw":

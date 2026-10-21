@@ -921,7 +921,7 @@ class CookieDialog(QDialog):
 
 
 SHORTCUTS = [
-    ("Right-click a collection or folder", "Run… (Collection Runner) or Load test… (many virtual users, live response-time chart)"),
+    ("Right-click a collection or folder", "Settings (auth, headers, scripts its requests inherit), Run… (Collection Runner) or Load test… (many virtual users, live response-time chart)"),
     ("Ctrl+K  /  Ctrl+P", "Command palette: jump to a request, switch environment, run a command"),
     ("Ctrl+Enter", "Send the request (or connect / send in WebSocket, MQTT, gRPC tabs)"),
     ("Ctrl+N  /  Ctrl+T", "New request"), ("Ctrl+S", "Save the request"), ("Ctrl+W", "Close the tab"),

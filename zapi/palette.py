@@ -63,7 +63,7 @@ class PaletteDialog(QDialog):
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.setObjectName("palette")
         self.setStyleSheet(f"QDialog#palette {{ background: {theme.PANEL2}; border: 1px solid {theme.BORDER2}; "
-                           "border-radius: 10px; }}")
+                           "border-radius: 10px; }")
         self.setFixedWidth(620)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 10, 10, 10)
@@ -76,7 +76,7 @@ class PaletteDialog(QDialog):
         lay.addWidget(self.edit)
         self.list = QListWidget()
         self.list.setObjectName("paletteList")
-        self.list.setStyleSheet("QListWidget#paletteList {{ background: transparent; border: none; outline: 0; }}")
+        self.list.setStyleSheet("QListWidget#paletteList { background: transparent; border: none; outline: 0; }")
         self.list.itemActivated.connect(self._pick)
         self.list.itemClicked.connect(self._pick)
         lay.addWidget(self.list)

@@ -247,3 +247,14 @@ class ResponseFilterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaletteStyleTests(unittest.TestCase):
+    def test_the_palette_stylesheets_are_valid_css(self):
+        # Qt prints "Could not parse stylesheet" and silently drops the rule when a brace is wrong
+        d = palette.PaletteDialog([{"title": "x", "subtitle": "", "kind": "command", "run": None}])
+        for sheet in (d.styleSheet(), d.list.styleSheet()):
+            self.assertNotIn("{{", sheet)
+            self.assertNotIn("}}", sheet)
+            self.assertEqual(sheet.count("{"), sheet.count("}"))
+        d.deleteLater()

@@ -7,6 +7,8 @@
 - JavaScript pre-request and test scripts (`pm` API); `zapi-cli run` for CI with JSON / JUnit reports.
 - Import: cURL (bash / cmd), `fetch()`, Postman, OpenAPI. Export: Zapi JSON, Postman v2.1, history, full backup.
 - Themes: System, Dark, Light, Midnight, High contrast, with accent colours and editor font size.
+- Scripts now live on one Scripts tab, like Postman, with a Pre-request / Post-response switch (a dot shows which has content); the old separate Pre-request Script and Tests tabs are gone. Stored requests are unchanged.
+- Collection and folder settings: authorization, headers and pre-request / test scripts set once and inherited by the requests inside (right-click a collection or folder, Settings; also in the command palette). New requests default to "Inherit auth from parent"; a request can set its own, a folder overrides its collection, scripts run collection, then folders, then the request. Applies to Send, the Runner, the CLI, load tests, Copy as cURL and Code. Postman import keeps collection / folder auth and scripts instead of copying them into every request, and export writes them back. The sidebar can no longer be dragged too narrow to fit its tabs and buttons.
 - Fixed: clicking a row in the response Headers (and other read-only tables) made its text disappear; selected rows now keep readable text in every theme.
 - Command palette (Ctrl+K or Ctrl+P): type a few letters to open a saved request or a history entry, switch environment, or run any command.
 - Developer tools (workspace menu, command palette, or right-click a selection in a response): JWT decoder with signature and expiry check, Base64, URL encode / decode, MD5 / SHA hashes and HMAC, epoch time converter, UUID generator.
