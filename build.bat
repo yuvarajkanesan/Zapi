@@ -1,8 +1,32 @@
 @echo off
-rem Builds dist\Zapi\Zapi.exe (and the installer if Inno Setup is installed).
+rem Builds dist\Zapi\Zapi.exe and, if Inno Setup is installed, the installer dist\Zapi-Setup.exe.
+rem
+rem   build.bat                 app + installer
+rem   build.bat test            run the unit tests first and stop if one fails
+rem   build.bat portable        also build the single-file portable edition dist\Zapi-Portable.exe
+rem   build.bat all             test + app + installer + portable
+rem   (set NOPAUSE=1 to skip the "press a key" pause when it was started by double-click)
+rem Needs: Python 3.12+ on PATH; Inno Setup 6 for the installer (optional). Code signing: see SIGN_CERT_SHA1 below.
 setlocal
 cd /d "%~dp0"
+set DO_TEST=0
+set DO_PORTABLE=0
+set RC=0
+for %%A in (%*) do (
+  if /i "%%A"=="test" set DO_TEST=1
+  if /i "%%A"=="portable" set DO_PORTABLE=1
+  if /i "%%A"=="all" (set DO_TEST=1& set DO_PORTABLE=1)
+  if /i "%%A"=="help" goto :usage
+  if /i "%%A"=="/?" goto :usage
+)
+python --version >nul 2>&1 || (echo Python was not found on PATH. Install Python 3.12 or newer and re-run. & goto :err)
 python -m pip install --quiet -r requirements-dev.txt || goto :err
+if "%DO_TEST%"=="1" (
+  echo Running the unit tests...
+  set QT_QPA_PLATFORM=offscreen
+  python -W error::SyntaxWarning -m unittest discover -s tests -t . || (echo Tests failed - not building. & goto :err)
+  set QT_QPA_PLATFORM=
+)
 python tools\make_assets.py || goto :err
 python tools\make_version.py || goto :err
 python tools\make_notices.py || goto :err
@@ -46,19 +70,52 @@ if defined LAVATI_SIGNTOOL call :signapp || goto :err
 if defined LAVATI_SIGNTOOL call set ISIGN=%%LAVATI_SIGNTOOL:"=$q%%
 if defined LAVATI_SIGNTOOL (echo Signing enabled) else (echo Signing skipped: SIGN_CERT_SHA1 is not set - the installer will show Unknown publisher)
 if defined ISCC (
-  if defined LAVATI_SIGNTOOL (
-    "%ISCC%" /DSign=1 "/Slavatisign=%ISIGN%" installer.iss || goto :err
-  ) else (
-    "%ISCC%" installer.iss || goto :err
-  )
+  call :runiscc || goto :err
   echo Installer: dist\Zapi-Setup.exe
 ) else (
   echo Inno Setup not found - skipping installer. Install it from https://jrsoftware.org/isdl.php and re-run.
 )
-exit /b 0
+if "%DO_PORTABLE%"=="1" (
+  echo.
+  echo Building the portable edition...
+  call "%~dp0make_portable.bat" || goto :err
+)
+echo.
+echo ===== Build finished =====
+for %%F in (dist\Zapi-Setup.exe dist\Zapi-Portable.exe) do if exist "%%F" (
+  echo %%F
+  certutil -hashfile "%%F" SHA256 | findstr /r "^[0-9a-f][0-9a-f]*$"
+)
+goto :end
+
+:usage
+echo Usage: build.bat [test] [portable] [all]
+echo   test      run the unit tests first
+echo   portable  also build dist\Zapi-Portable.exe (one file, no installer)
+echo   all       test + installer + portable
+set RC=0
+goto :end
+
 :err
 echo Build failed.
-exit /b 1
+set RC=1
+
+:end
+rem pause only when started by double-click (Explorer runs "cmd /c"), so the window does not vanish
+if not defined NOPAUSE echo %cmdcmdline% | find /i "/c" >nul && pause
+exit /b %RC%
+
+:runiscc
+rem Inno Setup occasionally fails because antivirus or Explorer briefly locks the output file: try up to 3 times
+set TRY=0
+:iscctry
+set /a TRY+=1
+if defined LAVATI_SIGNTOOL ("%ISCC%" /DSign=1 "/Slavatisign=%ISIGN%" installer.iss) else ("%ISCC%" installer.iss)
+if not errorlevel 1 exit /b 0
+if %TRY% GEQ 3 exit /b 1
+echo Inno Setup failed - retrying in 5 seconds...
+timeout /t 5 /nobreak >nul
+goto :iscctry
 
 :findsigntool
 set SIGNTOOL_EXE=

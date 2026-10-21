@@ -81,7 +81,7 @@ class ImportDialog(QDialog):
                              "or a collection / environment exported from Zapi."))
         row = QHBoxLayout()
         self.path = QLineEdit()
-        self.path.setPlaceholderText("Choose one or more .json files")
+        self.path.setPlaceholderText("Choose one or more .json, .yaml or .har files")
         browse = QPushButton("Browse…")
         browse.clicked.connect(self._browse)
         row.addWidget(self.path, 1)
@@ -101,7 +101,7 @@ class ImportDialog(QDialog):
         self.paths = []
 
     def _browse(self):
-        paths, _ = QFileDialog.getOpenFileNames(self, "Import", "", "API files (*.json *.yaml *.yml);;All files (*)")
+        paths, _ = QFileDialog.getOpenFileNames(self, "Import", "", "API files (*.json *.yaml *.yml *.har);;All files (*)")
         if paths:
             self.paths = paths
             self.path.setText("; ".join(paths))
@@ -921,6 +921,8 @@ class CookieDialog(QDialog):
 
 
 SHORTCUTS = [
+    ("Right-click a collection or folder", "Run… (Collection Runner) or Load test… (many virtual users, live response-time chart)"),
+    ("Ctrl+K  /  Ctrl+P", "Command palette: jump to a request, switch environment, run a command"),
     ("Ctrl+Enter", "Send the request (or connect / send in WebSocket, MQTT, gRPC tabs)"),
     ("Ctrl+N  /  Ctrl+T", "New request"), ("Ctrl+S", "Save the request"), ("Ctrl+W", "Close the tab"),
     ("Ctrl+L", "Focus the URL bar"), ("Ctrl+Shift+C", "Copy the request as cURL"),

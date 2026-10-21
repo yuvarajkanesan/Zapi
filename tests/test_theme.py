@@ -171,3 +171,15 @@ class WindowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SelectedRowTests(unittest.TestCase):
+    def test_selected_table_rows_keep_readable_text_in_every_theme(self):
+        # a table item style without a :selected rule makes the row text fall back to the system highlight colour
+        for name in theme.PALETTES:
+            theme.apply(name)
+            css = theme.qss()
+            self.assertIn("QTableWidget::item:selected", css, name)
+            self.assertIn(f"selection-color: {theme.TEXT}", css, name)
+            self.assertGreaterEqual(contrast(theme.TEXT, theme.SELECTED), 7.0, name)
+        theme.apply("Dark")

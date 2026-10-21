@@ -91,6 +91,7 @@ class Sidebar(QWidget):
     importRequested = Signal()
     manageEnvironments = Signal()
     runCollection = Signal(str, str)      # collection id, folder path
+    loadTest = Signal(str, str)           # collection id, folder path
     exportRequested = Signal(str)         # collections | environments | history | workspace
     copied = Signal(str)                  # status message after a copy action
     workspaceChanged = Signal()
@@ -394,6 +395,7 @@ class Sidebar(QWidget):
                 add.addAction(label, lambda kk=k: self.newRequest.emit(ident, "", kk))
             m.addAction("New folder…", lambda: self._new_folder(ident, ""))
             m.addAction("Run collection…", lambda: self.runCollection.emit(ident, ""))
+            m.addAction("Load test…", lambda: self.loadTest.emit(ident, ""))
             m.addSeparator()
             m.addAction("Rename", lambda: self._rename_collection(c))
             m.addAction("Variables…", lambda: self._collection_variables(c))
@@ -406,6 +408,7 @@ class Sidebar(QWidget):
             m.addAction("New request here", lambda: self.newRequest.emit(cid, ident, "http"))
             m.addAction("New subfolder…", lambda: self._new_folder(cid, ident))
             m.addAction("Run folder…", lambda: self.runCollection.emit(cid, ident))
+            m.addAction("Load test…", lambda: self.loadTest.emit(cid, ident))
             m.addSeparator()
             m.addAction("Rename", lambda: self._rename_folder(cid, ident))
             m.addAction("Delete", lambda: self._delete_folder(cid, ident))

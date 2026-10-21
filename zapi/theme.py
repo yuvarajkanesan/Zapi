@@ -569,8 +569,11 @@ QTreeWidget::branch:has-children:closed {{ image: url({chev_r}); }}
 QTreeWidget::branch:has-children:open {{ image: url({chev}); }}
 QTabBar::close-button {{ image: url({close}); subcontrol-position: right; padding: 2px; border-radius: 4px; }}
 QTabBar::close-button:hover {{ image: url({close_hot}); background: {BORDER2}; }}
-QTableWidget {{ gridline-color: {BORDER}; selection-background-color: {SELECTED}; }}
+QTableWidget {{ gridline-color: {BORDER}; selection-background-color: {SELECTED}; selection-color: {TEXT}; }}
 QTableWidget::item {{ padding: 2px 6px; border-bottom: 1px solid {BORDER}; }}
+QTableWidget::item:hover {{ background: {HOVER}; }}
+QTableWidget::item:selected {{ background: {SELECTED}; color: {TEXT}; }}
+QTableWidget::item:selected:!active {{ background: {SELECTED}; color: {TEXT}; }}
 QTableWidget QLineEdit {{ border: none; border-radius: 0; background: transparent; padding: 4px 8px; }}
 QTableWidget QLineEdit:focus {{ background: {FIELD}; border: 1px solid {ACCENT}; }}
 QHeaderView {{ background: transparent; }}

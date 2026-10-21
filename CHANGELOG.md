@@ -7,6 +7,13 @@
 - JavaScript pre-request and test scripts (`pm` API); `zapi-cli run` for CI with JSON / JUnit reports.
 - Import: cURL (bash / cmd), `fetch()`, Postman, OpenAPI. Export: Zapi JSON, Postman v2.1, history, full backup.
 - Themes: System, Dark, Light, Midnight, High contrast, with accent colours and editor font size.
+- Fixed: clicking a row in the response Headers (and other read-only tables) made its text disappear; selected rows now keep readable text in every theme.
+- Command palette (Ctrl+K or Ctrl+P): type a few letters to open a saved request or a history entry, switch environment, or run any command.
+- Developer tools (workspace menu, command palette, or right-click a selection in a response): JWT decoder with signature and expiry check, Base64, URL encode / decode, MD5 / SHA hashes and HMAC, epoch time converter, UUID generator.
+- Response filter: type a JSON path (`$.data[0].id`, `$..name`, `$.items[?(@.price < 10)].title`, `.length()`) above a JSON response to see only that part.
+- Import browser HAR files (DevTools: Network, Save all as HAR): API calls become a collection; pictures, fonts, scripts and stylesheets are skipped.
+- `build.bat` options: `test`, `portable`, `all`; retries Inno Setup if antivirus locks the file and prints the SHA-256 of what it built.
+- Load test (like Postman's performance testing): right-click a collection or folder, use the Load test button in the status bar or the workspace menu. Virtual users (up to 500) with a Fixed, Ramp up or Spike profile, think time, optional data file; live tiles, a response-time chart and a per-request table; export to JSON or CSV. It asks before sending (it names the hosts) and reminds you to test only servers you own. `zapi-cli load` does the same from a terminal with `--max-error-rate` / `--max-p95` thresholds for CI.
 - The whole workspace file is now compressed (zlib) and encrypted with Windows DPAPI, not only the secret fields; credentials are still encrypted a second time inside. Older plain files are read and upgraded on the next save. A file that cannot be opened (another account or computer) is copied aside untouched and Zapi tells you, instead of silently starting empty. The "looks like a secret" warning under the URL bar is gone because it is no longer needed.
 - Right-click menus (History, collections, tabs) always use the active theme; they could appear black when opened from some panels.
 - Portable edition: `make_portable.bat` builds a single file, `dist\Zapi-Portable.exe` (no installer, no admin rights). It keeps the workspace, logs and caches in a `ZapiData` folder next to the exe. A `portable.txt` beside any Zapi exe also switches it to portable mode. `zapi-cli.exe --data-dir` shows where a copy keeps its data.

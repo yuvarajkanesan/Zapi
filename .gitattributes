@@ -9,3 +9,5 @@
 *.bmp binary
 *.ico binary
 *.ttf binary
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -4,7 +4,8 @@
 - MIT licence, installer EULA, `THIRD_PARTY_NOTICES.txt` (generated from the installed packages; includes the LGPL / GPL
   texts Qt requires and the SIL OFL for the fonts), Windows file-version resources, publisher shown as Lavati Softwares.
 - No telemetry and no account. Crash reports are written to `%APPDATA%\Zapi\logs` and never sent.
-- `build.bat` -> tests-free reproducible build + packaged self-test + installer. `.github/workflows/ci.yml` runs the tests
+- `build.bat` -> reproducible build + packaged self-test + installer (`build.bat all` also runs the unit tests first and builds the
+  single-file portable exe; `build.bat help` lists the options). `.github/workflows/ci.yml` runs the tests
   on every push and builds the installer for `v*` tags (written without a way to run it here: check the first run).
 - Themes (System / Dark / Light / Midnight / High contrast + accent colours), all checked for WCAG contrast.
 

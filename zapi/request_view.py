@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 
 from shiboken6 import isValid
 
-from . import curl, http_client, oauth2, store, theme, variable_assist, variables
+from . import curl, http_client, jsonpath, oauth2, store, theme, variable_assist, variables
 from .widgets import (CodeEditor, CopyTable, KVEditor, KVTable, Worker, copy_text, flat, pretty_json, pretty_xml,
                       primary)
 
@@ -517,8 +517,16 @@ class RequestView(QWidget):
         self.search.setFixedWidth(200)
         self.search.returnPressed.connect(self._find_next)
         self.search.textChanged.connect(lambda *_: self._find_next(restart=True))
+        self.path_filter = QLineEdit()
+        self.path_filter.setPlaceholderText("Filter: $.data[0].id")
+        self.path_filter.setToolTip("Show only part of a JSON response. Examples:  $.items[0].id   $..name   "
+                                    "$.items[?(@.price < 10)].title   $.items.length()")
+        self.path_filter.setClearButtonEnabled(True)
+        self.path_filter.setFixedWidth(190)
+        self.path_filter.textChanged.connect(lambda *_: self._render_body())
         tools.addSpacing(8)
         tools.addWidget(self.search)
+        tools.addWidget(self.path_filter)
         tools.addStretch(1)
         self.example_btn = QPushButton("Save example")
         self.example_btn.setToolTip("Keep this response with the request; the mock server can serve it")
@@ -627,6 +635,10 @@ class RequestView(QWidget):
         m = QMenu(self)
         if self.view.textCursor().hasSelection():
             m.addAction("Copy selection", self.view.copy)
+            sel = self.view.textCursor().selectedText().strip()
+            if sel.count(".") >= 1 and " " not in sel and len(sel) > 20:
+                m.addAction("Decode selection as JWT…", lambda: self._open_devtools("jwt", sel))
+            m.addAction("Open selection in Developer tools…", lambda: self._open_devtools("base64", sel))
         m.addAction("Copy all", lambda: self.copy_what("body"))
         m.addAction("Select all", self.view.selectAll)
         m.addSeparator()
@@ -634,6 +646,10 @@ class RequestView(QWidget):
         m.addAction("Copy request as cURL", lambda: self.copy_what("curl"))
         m.addAction("Save body to file…", self.save_body)
         m.exec(self.view.viewport().mapToGlobal(pos))
+
+    def _open_devtools(self, tab, text):
+        from .devtools_view import DevToolsDialog
+        DevToolsDialog(self, tab, text).exec()
 
     def _table(self, headers):
         t = CopyTable(0, len(headers))
@@ -1049,7 +1065,22 @@ class RequestView(QWidget):
             out = pretty_json(text) if lang == "json" else pretty_xml(text) if lang == "xml" else None
             if out is not None:
                 text = out
-        self.view.set_language(lang if len(resp.body) <= PRETTY_LIMIT else "none")
+        shown = lang if len(resp.body) <= PRETTY_LIMIT else "none"
+        wanted = self.path_filter.text().strip()
+        self.path_filter.setStyleSheet("")
+        if wanted and lang == "json":
+            try:
+                found = jsonpath.query(json.loads(resp.text()), wanted)
+                text = jsonpath.format_results(found) if found else f"No match for {wanted}"
+                shown = "json" if found and not isinstance(found[0] if len(found) == 1 else found, str) else "none"
+            except jsonpath.PathError as e:
+                self.path_filter.setStyleSheet(f"QLineEdit {{ border: 1px solid {theme.RED}; }}")
+                text = (f"{e}\n\nExamples:  $.items[0].id    $..name    $.items[?(@.price < 10)].title    "
+                        "$.items.length()")
+                shown = "none"
+            except ValueError:
+                pass                                                  # the body is not valid JSON after all: show it whole
+        self.view.set_language(shown)
         self.view.setPlainText(text)
         self.body_stack.setCurrentIndex(1)
         if self.search.text():

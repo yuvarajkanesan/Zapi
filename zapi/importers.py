@@ -56,6 +56,8 @@ def import_data(data, fallback_name="Imported"):
         return "collection", _zapi_collection(data)
     if kind == "environment":
         return "environment", _zapi_environment(data)
+    if isinstance(data.get("log"), dict) and isinstance(data["log"].get("entries"), list):
+        return "collection", from_har(data, fallback_name if fallback_name != "Imported" else "HAR import")
     if "openapi" in data or "swagger" in data:
         return "collection", from_openapi(data)
     if isinstance(data.get("info"), dict) and "item" in data:
@@ -63,7 +65,7 @@ def import_data(data, fallback_name="Imported"):
     if "values" in data and isinstance(data["values"], list):
         return "environment", from_postman_environment(data)
     raise ImportError_("Unrecognised file. Zapi can import Postman collections and environments, "
-                       "OpenAPI 3 specs and Zapi exports.")
+                       "OpenAPI 3 specs, browser HAR files and Zapi exports.")
 
 
 def import_file(path):
@@ -87,6 +89,76 @@ def _zapi_environment(d):
 
 
 # ---- Postman ----------------------------------------------------------------
+_SKIP_RESOURCES = {"image", "stylesheet", "font", "script", "media", "manifest", "texttrack", "ping", "prefetch"}
+_SKIP_MIME = ("image/", "font/", "audio/", "video/", "text/css", "text/javascript", "application/javascript",
+              "application/x-javascript", "application/font", "application/wasm")
+_HAR_SKIP_HEADERS = {"host", "content-length", "connection", "accept-encoding", "upgrade-insecure-requests",
+                     "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-user", "sec-ch-ua",
+                     "sec-ch-ua-mobile", "sec-ch-ua-platform", "priority", "pragma", "cache-control"}
+
+
+def from_har(d, name="HAR import", only_api=True):
+    """A browser HAR file (DevTools: Network -> Save all as HAR) becomes a collection. By default only API-like calls are
+    kept (XHR / fetch and JSON / XML / text responses); pictures, fonts, scripts and stylesheets are left out."""
+    from urllib.parse import urlsplit
+    log = d["log"]
+    c = store.new_collection(((log.get("pages") or [{}])[0].get("title") or "").strip() or name)
+    seen = set()
+    for e in log["entries"]:
+        if not isinstance(e, dict) or not isinstance(e.get("request"), dict):
+            continue
+        r = e["request"]
+        url = r.get("url") or ""
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https"):
+            continue
+        method = (r.get("method") or "GET").upper()
+        mime = ((e.get("response") or {}).get("content") or {}).get("mimeType", "").lower()
+        if only_api:
+            if (e.get("_resourceType") or "").lower() in _SKIP_RESOURCES or mime.startswith(_SKIP_MIME):
+                continue
+            if method == "OPTIONS":
+                continue
+        base = url.split("#")[0].partition("?")[0]
+        req = store.new_request(f"{method} {parts.path or '/'}", method, base)
+        for q in r.get("queryString") or []:
+            if q.get("name"):
+                req["params"].append(store.kv(q["name"], str(q.get("value", ""))))
+        if not req["params"] and parts.query:
+            for pair in parts.query.split("&"):
+                k, _, v = pair.partition("=")
+                if k:
+                    req["params"].append(store.kv(k, v))
+        for h in r.get("headers") or []:
+            n = str(h.get("name", ""))
+            if n and not n.startswith(":") and n.lower() not in _HAR_SKIP_HEADERS:
+                req["headers"].append(store.kv(n, str(h.get("value", ""))))
+        post = r.get("postData") or {}
+        ctype = (post.get("mimeType") or "").lower()
+        if post.get("text") or post.get("params"):
+            if "x-www-form-urlencoded" in ctype:
+                rows = post.get("params") or [dict(zip(("name", "value"), pair.partition("=")[::2]))
+                                              for pair in (post.get("text") or "").split("&") if pair]
+                req["body"].update({"mode": "urlencoded", "urlencoded": [
+                    store.kv(x.get("name", ""), str(x.get("value", ""))) for x in rows if x.get("name")]})
+            elif "multipart/form-data" in ctype and post.get("params"):
+                req["body"].update({"mode": "form-data", "form": [
+                    dict(store.kv(x.get("name", ""), str(x.get("value", ""))), type="file" if x.get("fileName") else "text")
+                    for x in post["params"] if x.get("name")]})
+                req["headers"] = [h for h in req["headers"] if h["key"].lower() != "content-type"]
+            else:
+                kind = "JSON" if "json" in ctype else "XML" if "xml" in ctype else "HTML" if "html" in ctype else "Text"
+                req["body"].update({"mode": "raw", "raw_type": kind, "raw": post.get("text") or ""})
+        key = (method, base, tuple((p["key"], p["value"]) for p in req["params"]), req["body"].get("raw", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        c["items"].append(req)
+    if not c["items"]:
+        raise ImportError_("That HAR file has no API requests in it (pictures, fonts, scripts and stylesheets are skipped).")
+    return Workspace_fix(c)
+
+
 def from_postman_environment(d):
     e = store.new_environment(d.get("name") or "Imported environment")
     for v in d.get("values", []):

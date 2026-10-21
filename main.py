@@ -189,6 +189,21 @@ def selftest():
         finally:
             m.stop()
 
+    def load_test():
+        from zapi import loadtest, mock, store
+        m = mock.MockServer([mock.new_route("GET", "/hi", 200, "hello")])
+        m.start()
+        try:
+            req = store.new_request(url=m.url() + "/hi")
+            t = loadtest.LoadTest([req], {"environment": {}, "globals": {}, "collection": {}},
+                                  {"timeout": 5}, loadtest.LoadConfig("Ramp up", 3, 2))
+            t.start()
+            assert t.wait(20)
+            s = t.snapshot()
+            assert s.requests > 0 and s.errors == 0 and s.p95 >= s.p50, (s.requests, s.errors)
+        finally:
+            m.stop()
+
     def protocols_and_auth():
         from zapi import auth, protocols
         frame = protocols.ws_encode_frame(0x1, b"hi", mask=True)
@@ -227,6 +242,7 @@ def selftest():
     check("script engine (helper process, timeout)", scripts)
     check("command line runner", cli_run)
     check("mock server", mock_server)
+    check("load test engine", load_test)
     check("websocket / mqtt / digest / md4", protocols_and_auth)
     check("grpc libraries", grpc)
     check("OpenAPI import with folders", importers)
@@ -261,7 +277,7 @@ def main(argv):
     if "--help" in args or "-h" in args:
         print(HELP)
         return 0
-    if args and args[0] == "run":
+    if args and args[0] in ("run", "load"):
         from zapi import cli
         return cli.main(args)
     if "--selftest" in args:

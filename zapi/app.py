@@ -199,6 +199,7 @@ class MainWindow(QMainWindow):
         self.sidebar.openHistory.connect(self.open_history)
         self.sidebar.newRequest.connect(self.new_request)
         self.sidebar.runCollection.connect(self.open_runner)
+        self.sidebar.loadTest.connect(self.open_load_test)
         self.sidebar.exportRequested.connect(self.export_what)
         self.sidebar.copied.connect(self._flash)
         self.sidebar.newCollection.connect(self.new_collection)
@@ -317,10 +318,14 @@ class MainWindow(QMainWindow):
         self.console_btn.clicked.connect(self.toggle_console)
         runner_btn = QPushButton("Runner")
         runner_btn.clicked.connect(lambda: self.open_runner())
+        load_btn = QPushButton("Load test")
+        load_btn.setToolTip("Run a collection with many virtual users and watch response times")
+        load_btn.clicked.connect(lambda: self.open_load_test())
         mock_btn = QPushButton("Mock server")
         mock_btn.clicked.connect(self.open_mock)
         lay.addWidget(self.console_btn)
         lay.addWidget(runner_btn)
+        lay.addWidget(load_btn)
         lay.addWidget(mock_btn)
         self.mock_label = QLabel("")
         self.mock_label.setStyleSheet(f"color: {theme.GREEN}; font-size: 8pt;")
@@ -365,6 +370,7 @@ class MainWindow(QMainWindow):
         sc(["Ctrl+L"], lambda: self.current_view() and self.current_view().focus_url())
         sc(["Ctrl+`"], self.toggle_console)
         sc(["Ctrl+Shift+E"], self.show_environments)
+        sc(["Ctrl+K", "Ctrl+P"], self.open_palette)
 
     # ---- tabs --------------------------------------------------------------------------
     def views(self):
@@ -819,7 +825,10 @@ class MainWindow(QMainWindow):
             self.refresh_environment_box()
             self.show_environments()
             return
-        self.ws.settings["active_env"] = data or ""
+        self.set_active_environment(data)
+
+    def set_active_environment(self, eid):
+        self.ws.settings["active_env"] = eid or ""
         self.ws.save()
         self.refresh_environment_box()
         self.sidebar.refresh()
@@ -862,6 +871,9 @@ class MainWindow(QMainWindow):
         m.addAction("Settings…", self.open_settings)
         m.addAction("Environments", self.show_environments)
         m.addAction("Runner…", lambda: self.open_runner())
+        m.addAction("Load test…", lambda: self.open_load_test())
+        m.addAction("Developer tools…", lambda: self.open_devtools())
+        m.addAction("Command palette…   Ctrl+K", self.open_palette)
         m.addAction("Mock server…", self.open_mock)
         m.addAction("Cookies…", lambda: CookieDialog(self.jar, self).exec())
         m.addSeparator()
@@ -907,6 +919,59 @@ class MainWindow(QMainWindow):
         else:
             fresh.show()
         self.close()
+
+    def open_devtools(self, tab="jwt", text=""):
+        from .devtools_view import DevToolsDialog
+        DevToolsDialog(self, tab, text).exec()
+
+    def palette_entries(self):
+        """Everything Ctrl+K can jump to: commands first (so an empty palette teaches what exists), then environments,
+        saved requests and recent history."""
+        def act(title, sub, fn):
+            return {"title": title, "subtitle": sub, "kind": "command", "run": fn}
+        entries = [
+            act("New request", "Ctrl+N", lambda: self.new_request(self._current_collection_id())),
+            act("New collection", "", self.new_collection),
+            act("Paste cURL / import…", "Turn a copied cURL, fetch() or a file into a request", self.paste_curl),
+            act("Import a file…", "Postman, OpenAPI, HAR or a Zapi export", self.import_file),
+            act("Environments", "Ctrl+Shift+E", self.show_environments),
+            act("Settings", "Theme, proxy, certificates, encryption", self.open_settings),
+            act("Collection Runner", "Run a collection with iterations and data files", lambda: self.open_runner()),
+            act("Load test", "Many virtual users, live response-time chart", lambda: self.open_load_test()),
+            act("Mock server", "Serve routes from this computer", self.open_mock),
+            act("Developer tools: JWT decoder", "Also Base64, URL, hash, time, UUID", lambda: self.open_devtools("jwt")),
+            act("Developer tools: Base64 / URL / hash", "", lambda: self.open_devtools("base64")),
+            act("Show / hide console", "Ctrl+`", self.toggle_console),
+            act("Cookies", "The cookie jar", lambda: CookieDialog(self.jar, self).exec()),
+            act("Help and shortcuts", "F1", lambda: HelpDialog(self).exec()),
+            act("Copy diagnostic info", "For a bug report: no requests, no secrets", self.copy_diagnostics),
+        ]
+        active = self.ws.settings.get("active_env", "")
+        entries.append({"title": "No environment", "subtitle": "Switch environment", "kind": "environment",
+                        "run": lambda: self.set_active_environment("")})
+        for e in self.ws.environments:
+            entries.append({"title": e["name"], "subtitle": "Switch environment" + ("  (active)" if e["id"] == active else ""),
+                            "kind": "environment", "run": lambda eid=e["id"]: self.set_active_environment(eid)})
+        for c in self.ws.collections:
+            for r in c["items"]:
+                where = c["name"] + (" / " + r["folder"] if r.get("folder") else "")
+                entries.append({"title": r["name"], "subtitle": f"{where}  ·  {r['method']} {r['url']}"[:140],
+                                "kind": store.badge(r), "run": lambda rid=r["id"]: self.open_saved_request(rid)})
+        for h in self.ws.history[:40]:
+            r = h["request"]
+            entries.append({"title": r["url"] or r["name"], "subtitle": f"History  ·  {r['method']}  ·  {h.get('status') or 'error'}",
+                            "kind": "history", "run": lambda hid=h["id"]: self.open_history(hid)})
+        return entries
+
+    def open_palette(self):
+        from .palette import PaletteDialog
+        dlg = PaletteDialog(self.palette_entries(), self)
+        if dlg.exec() and dlg.chosen:
+            dlg.chosen["run"]()
+
+    def open_load_test(self, collection_id="", folder=""):
+        from .load_view import LoadTestDialog
+        LoadTestDialog(self.ws, collection_id or self._current_collection_id(), folder, self).exec()
 
     def open_runner(self, collection_id="", folder=""):
         dlg = RunnerDialog(self.ws, collection_id or self._current_collection_id(), folder, self)
