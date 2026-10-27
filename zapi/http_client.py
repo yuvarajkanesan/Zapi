@@ -156,14 +156,21 @@ def build_body(req, values):
             val = variables.substitute(r.get("value", ""), values)
             out += f"--{boundary}\r\n".encode()
             if r.get("type") == "file":
-                fname = os.path.basename(val)
-                ctype = mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                if not val.strip():
+                    raise ValueError(f"Form field “{r['key']}” is a file but no file is chosen: pick one in the "
+                                     "Value column (or untick the row).")
+                fname = (r.get("filename") or os.path.basename(val)).replace('"', "%22")
+                ctype = r.get("content_type") or mimetypes.guess_type(fname)[0] or "application/octet-stream"
+                try:
+                    with open(val, "rb") as f:
+                        content = f.read()
+                except OSError as e:
+                    raise ValueError(f"Cannot read the file for form field “{r['key']}”: {e.strerror or e}") from None
                 out += (f'Content-Disposition: form-data; name="{name}"; filename="{fname}"\r\n'
-                        f"Content-Type: {ctype}\r\n\r\n").encode()
-                with open(val, "rb") as f:
-                    out += f.read()
+                        f"Content-Type: {ctype}\r\n\r\n").encode() + content
             else:
-                out += f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode() + val.encode("utf-8")
+                part_type = f"Content-Type: {r['content_type']}\r\n" if r.get("content_type") else ""
+                out += f'Content-Disposition: form-data; name="{name}"\r\n{part_type}\r\n'.encode() + val.encode("utf-8")
             out += b"\r\n"
         out += f"--{boundary}--\r\n".encode()
         return bytes(out), f"multipart/form-data; boundary={boundary}"

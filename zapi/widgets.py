@@ -291,6 +291,9 @@ class KVTable(QTableWidget):
             if key == "" and val == "":
                 continue
             row = store.kv(key, val, self._check(i).isChecked())
+            extra = self._edit(i, 1).property("extra")        # e.g. a form field's content_type / filename from a cURL import
+            if isinstance(extra, dict):
+                row.update(extra)
             if self.with_type:
                 row["type"] = self._type(i).currentText()
             out.append(row)
@@ -319,6 +322,10 @@ class KVTable(QTableWidget):
         self.setCellWidget(i, 0, box)
         key = QLineEdit(r["key"] if r else "")
         key.setPlaceholderText(self.key_hint)
+        if r:
+            extra = {k: v for k, v in r.items() if k not in ("key", "value", "enabled", "type") and isinstance(v, str)}
+            if extra:
+                key.setProperty("extra", extra)
         val = QLineEdit(r.get("value", "") if r else "")
         val.setPlaceholderText(self.value_hint)
         self.setCellWidget(i, 1, key)

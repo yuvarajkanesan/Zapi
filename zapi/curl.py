@@ -4,7 +4,7 @@ import re
 import shlex
 import urllib.parse
 
-from . import http_client, store, variables
+from . import curl_form, http_client, store, variables
 
 
 class CurlError(ValueError):
@@ -48,15 +48,68 @@ def _tokenize(text):
     text = text.strip()
     # Windows "Copy as cURL (cmd)": every special character is escaped with ^ and lines end with ^
     cmd_style = bool(re.search(r"\^\r?\n", text)) or '^"' in text
+    if cmd_style:
+        # inside a quoted body cmd writes a line break as ^ + newline + an empty line (Chrome's multipart bodies)
+        text = re.sub(r"\^\r?\n[ \t]*\r?\n", "\x01", text)
     # line continuations from bash (\), cmd (^) and PowerShell (`)
     text = re.sub(r"\\\r?\n|\^\r?\n|`\r?\n", " ", text)
     if cmd_style:
         text = re.sub(r"\^(.)", r"\1", text, flags=re.S)
+    elif "`\"" in text:
+        text = text.replace("`\"", "\\\"")                    # PowerShell: a backtick escapes a quote inside "..."
     text = _ANSI_C.sub(_decode_ansi_c, text)
     try:
-        return shlex.split(text, posix=True)
+        return [t.replace("\x01", "\r\n") for t in shlex.split(text, posix=True)]
     except ValueError as e:
         raise CurlError(f"Could not read the command: {e}")
+
+
+# options that take a value (so "-Fa=1", "--form=a=1" and "-H 'A: b'" are all read the same way)
+_SHORT_ARG = set("XHdFuAbeoxmwcDTKzErYy")
+_LONG_ARG = {"request", "header", "data", "data-raw", "data-binary", "data-ascii", "data-urlencode", "form", "form-string",
+             "user", "user-agent", "cookie", "referer", "url", "json", "output", "max-time", "connect-timeout", "proxy",
+             "cacert", "cert", "key", "write-out", "retry", "cookie-jar", "dump-header", "upload-file", "config",
+             "range", "proxy-user", "resolve", "interface", "limit-rate", "capath", "pass", "retry-delay",
+             "oauth2-bearer"}
+
+
+def _expand(tokens):
+    """tokens -> [(option or "", value or None)]. "" is a positional argument (the URL)."""
+    out, i = [], 0
+    while i < len(tokens):
+        t = tokens[i]
+        i += 1
+        if t == "-" or not t.startswith("-"):
+            out.append(("", t))
+        elif t.startswith("--"):
+            name, sep, val = t[2:].partition("=")
+            if name in _LONG_ARG:
+                if not sep:
+                    if i >= len(tokens):
+                        raise CurlError(f"--{name} needs a value")
+                    val, i = tokens[i], i + 1
+                out.append(("--" + name, val))
+            else:
+                out.append(("--" + name, None))
+        else:
+            j = 1
+            while j < len(t):
+                ch = t[j]
+                if ch in _SHORT_ARG:
+                    val = t[j + 1:]
+                    if not val:
+                        if i >= len(tokens):
+                            raise CurlError(f"-{ch} needs a value")
+                        val, i = tokens[i], i + 1
+                    out.append(("-" + ch, val))
+                    break
+                out.append(("-" + ch, None))              # a flag such as -s -k -L -v (they can be combined: -sSL)
+                j += 1
+    return out
+
+
+_ALIASES = {"-X": "--request", "-H": "--header", "-d": "--data", "-F": "--form", "-u": "--user", "-A": "--user-agent",
+            "-b": "--cookie", "-e": "--referer", "-G": "--get"}
 
 
 def parse(text):
@@ -70,62 +123,70 @@ def parse(text):
     method = None
     url = None
     headers = []
-    data_parts = []
-    form = []
+    data_parts = []          # (kind, text): d = -d / --data, raw = --data-raw, bin = --data-binary / --data-ascii, enc = --data-urlencode
+    form = []                # ready-made form rows
     user = None
     get_flag = False
     json_flag = False
-    i = 0
-
-    def value():
-        nonlocal i
-        i += 1
-        if i >= len(tokens):
-            raise CurlError(f"{tokens[i - 1]} needs a value")
-        return tokens[i]
-
-    while i < len(tokens):
-        t = tokens[i]
-        if t in ("-X", "--request"):
-            method = value().upper()
-        elif t.startswith("-X") and len(t) > 2:
-            method = t[2:].upper()
-        elif t.startswith("--request="):
-            method = t.split("=", 1)[1].upper()
-        elif t in ("-H", "--header"):
-            headers.append(value())
-        elif t.startswith("--header="):
-            headers.append(t.split("=", 1)[1])
-        elif t in ("-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode"):
-            data_parts.append(value())
-        elif t.startswith("--data=") or t.startswith("--data-raw="):
-            data_parts.append(t.split("=", 1)[1])
-        elif t in ("-F", "--form"):
-            form.append(value())
-        elif t in ("-u", "--user"):
-            user = value()
-        elif t in ("-A", "--user-agent"):
-            headers.append("User-Agent: " + value())
-        elif t in ("-b", "--cookie"):
-            headers.append("Cookie: " + value())
-        elif t in ("-e", "--referer"):
-            headers.append("Referer: " + value())
-        elif t in ("-G", "--get"):
+    head = False
+    upload = None
+    scheme = ""
+    bearer = ""
+    for opt, val in _expand(tokens):
+        opt = _ALIASES.get(opt, opt)
+        if opt in ("-I", "--head"):
+            head = True
+        elif opt in ("-T", "--upload-file"):
+            upload = val
+        elif opt in ("--digest", "--ntlm", "--basic"):
+            scheme = opt[2:]
+        elif opt == "--oauth2-bearer":
+            bearer = val
+        if opt == "--request":
+            method = val.upper()
+        elif opt == "--header":
+            headers.append(val)
+        elif opt == "--data":
+            data_parts.append(("d", val))
+        elif opt == "--data-raw":
+            data_parts.append(("raw", val))
+        elif opt in ("--data-binary", "--data-ascii"):
+            data_parts.append(("bin", val))
+        elif opt == "--data-urlencode":
+            data_parts.append(("enc", val))
+        elif opt == "--form":
+            form.append(curl_form.form_row(val))
+        elif opt == "--form-string":
+            form.append(curl_form.form_row(val, literal=True))
+        elif opt == "--user":
+            user = val
+        elif opt == "--user-agent":
+            headers.append("User-Agent: " + val)
+        elif opt == "--cookie":
+            headers.append("Cookie: " + val)
+        elif opt == "--referer":
+            headers.append("Referer: " + val)
+        elif opt == "--get":
             get_flag = True
-        elif t == "--json":
-            data_parts.append(value())
+        elif opt == "--json":
+            data_parts.append(("raw", val))
             json_flag = True
-        elif t == "--url":
-            url = value()
-        elif t in ("-o", "--output", "-m", "--max-time", "--connect-timeout", "--proxy", "-x", "--cacert",
-                   "--cert", "--key", "-w", "--write-out", "--retry"):
-            value()
-        elif t.startswith("-") and t != "-":
-            pass   # -s -k -L -i -v --compressed ... carry no request data
-        elif url is None:
-            url = t
-        i += 1
-    return _from_parts(url, method, headers, data_parts, form, user, get_flag, json_flag)
+        elif opt == "--url":
+            url = val
+        elif opt == "" and url is None:
+            url = val
+        # everything else (-s -k -L -i -v --compressed -o file --proxy ...) carries no request data
+    req = _from_parts(url, method, headers, data_parts, form, user, get_flag, json_flag)
+    if upload and req["body"]["mode"] == "none":                      # -T file: the file is the body, the method is PUT
+        req["body"].update({"mode": "binary", "file": upload})
+        req["method"] = method or "PUT"
+    if head and not method:
+        req["method"] = "HEAD"
+    if user is not None and scheme in ("digest", "ntlm"):
+        req["auth"]["type"] = scheme
+    if bearer:
+        req["auth"].update({"type": "bearer", "token": bearer})
+    return req
 
 
 # headers browsers add that must not be copied: the client sets its own, and a stale value breaks the request
@@ -142,10 +203,12 @@ def _from_parts(url, method, headers, data_parts, form, user, get_flag, json_fla
     req = store.new_request(name=_name_from_url(url), url=url)
     if get_flag and data_parts:
         sep = "&" if "?" in req["url"] else "?"
-        req["url"] += sep + "&".join(data_parts)
+        req["url"] += sep + "&".join(p[1] if isinstance(p, tuple) else p for p in data_parts)
         data_parts = []
     ctype = ""
     for h in headers:
+        if ":" not in h and h.endswith(";"):                       # curl: "Name;" sends the header with an empty value
+            h = h[:-1] + ":"
         k, _, v = h.partition(":")
         if not k.strip() or k.strip().lower() in _SKIP_HEADERS or h.startswith(":"):
             continue
@@ -166,18 +229,41 @@ def _from_parts(url, method, headers, data_parts, form, user, get_flag, json_fla
                 req["headers"].remove(h)
 
     body = req["body"]
+    parts = [p if isinstance(p, tuple) else ("raw", p) for p in data_parts]           # fetch() bodies are literal text
+    boundary = ""
+    for h in headers:
+        if h.partition(":")[0].strip().lower() == "content-type":
+            boundary = curl_form.boundary_of(h.partition(":")[2])
+    if not form and parts and "multipart/form-data" in ctype and boundary:
+        form = curl_form.parse_multipart("&".join(v for _k, v in parts), boundary)    # a browser's "Copy as cURL"
+        if form:
+            parts = []
+    file_body = len(parts) == 1 and parts[0][0] in ("d", "bin") and parts[0][1].startswith("@") and len(parts[0][1]) > 1
     if form:
         body["mode"] = "form-data"
-        for f in form:
-            k, _, v = f.partition("=")
-            if v.startswith("@"):
-                body["form"].append(store.kv(k, v[1:], type="file"))
-            else:
-                body["form"].append(store.kv(k, v, type="text"))
+        body["form"] = form
         req["headers"] = [h for h in req["headers"] if h["key"].lower() != "content-type"]
-    elif data_parts:
-        joined = "&".join(data_parts)
-        if "application/x-www-form-urlencoded" in ctype or (not ctype and not joined.lstrip().startswith(("{", "["))):
+    elif file_body:
+        body["mode"] = "binary"                                                       # -d @file / --data-binary @file
+        body["file"] = parts[0][1][1:]
+    elif parts:
+        pieces = []
+        for kind, v in parts:
+            if kind == "enc":                                                         # --data-urlencode: [name=]content
+                name, sep, content = v.partition("=")
+                if sep:
+                    pieces.append(name + "=" + urllib.parse.quote(content, safe=""))
+                elif "@" in v:                                                        # name@file / @file: kept visible
+                    n, _, path = v.partition("@")
+                    pieces.append((n + "=" if n else "") + "@" + path)
+                else:
+                    pieces.append(urllib.parse.quote(v, safe=""))
+            else:
+                pieces.append(v)
+        joined = "&".join(pieces)
+        json_like = joined.lstrip().startswith(("{", "["))
+        urlenc_type = "application/x-www-form-urlencoded" in ctype
+        if (urlenc_type and not json_like) or (not ctype and not json_like):
             body["mode"] = "x-www-form-urlencoded"
             for pair in joined.split("&"):
                 k, _, v = pair.partition("=")
@@ -343,6 +429,24 @@ def _sq(s):
     return "'" + s.replace("'", "'\"'\"'") + "'"
 
 
+def _form_arg(r, val):
+    """The cURL argument for one form-data row; round-trips through curl_form.form_row."""
+    key = r["key"]
+    is_file = r.get("type") == "file"
+    mods = ""
+    if is_file and r.get("filename") and r["filename"] != val.replace("\\", "/").split("/")[-1]:
+        mods += f";filename={r['filename']}"
+    if r.get("content_type"):
+        mods += f";type={r['content_type']}"
+    if is_file:
+        return "-F " + _sq(f"{key}=@{val}{mods}")
+    if val.startswith(("@", "<")):
+        return "--form-string " + _sq(f"{key}={val}")                    # a leading @ or < would mean "read a file"
+    if ";" in val or val.startswith('"'):
+        return "-F " + _sq(f'{key}="' + val.replace("\\", "\\\\").replace('"', '\\"') + '"' + mods)
+    return "-F " + _sq(f"{key}={val}{mods}")
+
+
 def generate(req, values, language):
     url, headers, data = _resolved(req, values)
     method = req.get("method", "GET").upper()
@@ -355,11 +459,13 @@ def generate(req, values, language):
         for k, v in headers:
             parts.append("-H " + _sq(f"{k}: {v}"))
         for r in form:
-            val = variables.substitute(r.get("value", ""), values)
-            parts.append("-F " + _sq(f"{r['key']}=" + ("@" if r.get("type") == "file" else "") + val))
+            parts.append(_form_arg(r, variables.substitute(r.get("value", ""), values)))
         if text is not None:
             parts.append("--data-raw " + _sq(text))
         return " \\\n  ".join(parts)
+    if form and language not in ("Python (requests)", "JavaScript (fetch)", "PowerShell"):
+        text, mp_type = curl_form.multipart_text(form, values)       # other languages: send the multipart text itself
+        headers = [(k, v) for k, v in headers if k.lower() != "content-type"] + [("Content-Type", mp_type)]
     if language == "Python (requests)":
         lines = ["import requests", "", f"url = {json.dumps(url)}"]
         if headers:
@@ -368,8 +474,19 @@ def generate(req, values, language):
         if headers:
             args.append("headers=headers")
         if form:
-            lines.append("data = " + json.dumps({r["key"]: r.get("value", "") for r in form if r.get("type") != "file"}))
-            args.append("data=data")
+            lines.append("files = [")
+            for r in form:
+                val = variables.substitute(r.get("value", ""), values)
+                key = json.dumps(variables.substitute(r["key"], values))
+                if r.get("type") == "file":
+                    fname = r.get("filename") or val.replace("\\", "/").split("/")[-1] or "file"
+                    ctype = f", {json.dumps(r['content_type'])}" if r.get("content_type") else ""
+                    lines.append(f"    ({key}, ({json.dumps(fname)}, open({json.dumps(val)}, \"rb\"){ctype})),")
+                else:
+                    ctype = f", {json.dumps(r['content_type'])}" if r.get("content_type") else ""
+                    lines.append(f"    ({key}, (None, {json.dumps(val)}{ctype})),")
+            lines.append("]")
+            args.append("files=files")
         if text is not None:
             lines.append(f"payload = {json.dumps(text)}")
             args.append("data=payload")
@@ -379,9 +496,26 @@ def generate(req, values, language):
         opts = [f'  method: "{method}"']
         if headers:
             opts.append("  headers: " + json.dumps(dict(headers), indent=4).replace("\n", "\n  "))
-        if text is not None:
+        prefix = ""
+        if form:
+            prefix = "const form = new FormData();\n"
+            for r in form:
+                val = variables.substitute(r.get("value", ""), values)
+                key = json.dumps(variables.substitute(r["key"], values))
+                if r.get("type") == "file":
+                    fname = r.get("filename") or val.replace("\\", "/").split("/")[-1] or "file"
+                    kind = f", {{ type: {json.dumps(r['content_type'])} }}" if r.get("content_type") else ""
+                    prefix += (f"form.append({key}, new Blob([/* the contents of {val} */]{kind}), "
+                               f"{json.dumps(fname)});\n")
+                elif r.get("content_type"):
+                    prefix += f"form.append({key}, new Blob([{json.dumps(val)}], {{ type: {json.dumps(r['content_type'])} }}));\n"
+                else:
+                    prefix += f"form.append({key}, {json.dumps(val)});\n"
+            prefix += "\n"
+            opts.append("  body: form")
+        elif text is not None:
             opts.append(f"  body: {json.dumps(text)}")
-        return (f"const response = await fetch({json.dumps(url)}, {{\n" + ",\n".join(opts) +
+        return (prefix + f"const response = await fetch({json.dumps(url)}, {{\n" + ",\n".join(opts) +
                 "\n});\nconsole.log(response.status, await response.text());")
     if language == "PowerShell":
         def ps(s):
@@ -392,7 +526,14 @@ def generate(req, values, language):
         cmd = f"Invoke-RestMethod -Method {method} -Uri {ps(url)}"
         if headers:
             cmd += " -Headers $headers"
-        if text is not None:
+        if form:
+            lines.append("# -Form needs PowerShell 7 or newer")
+            lines.append("$form = @{\n" + "\n".join(
+                f"  {ps(variables.substitute(r['key'], values))} = " +
+                (f"Get-Item -Path {ps(variables.substitute(r.get('value', ''), values))}" if r.get("type") == "file"
+                 else ps(variables.substitute(r.get("value", ""), values))) for r in form) + "\n}")
+            cmd += " -Form $form"
+        elif text is not None:
             lines.append(f"$body = {ps(text)}")
             cmd += " -Body $body"
         lines.append(cmd)

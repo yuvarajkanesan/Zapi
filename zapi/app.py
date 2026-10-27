@@ -557,9 +557,15 @@ class MainWindow(QMainWindow):
                 view._edited()
                 view.url.setFocus()
             else:
-                self._add_view(obj, "", persisted=False)
+                view = self._add_view(obj, "", persisted=False)
             self.show_main()
-            self._flash("Imported request")
+            missing = [r["key"] for r in obj["body"].get("form", []) if r.get("type") == "file" and not r.get("value")]
+            if missing and view is not None and hasattr(view, "rtabs"):
+                view.rtabs.bar.setCurrentIndex(3)                      # the Body tab, where the file has to be chosen
+                self._flash("Imported request. Choose the file for: " + ", ".join(missing) +
+                            " (Body, form-data): a copied command does not contain the file itself.", 12000)
+            else:
+                self._flash("Imported request")
         else:
             was_empty = in_view and not view.req.get("url")
             if in_view and hasattr(view, "url"):

@@ -7,6 +7,13 @@
 - JavaScript pre-request and test scripts (`pm` API); `zapi-cli run` for CI with JSON / JUnit reports.
 - Import: cURL (bash / cmd), `fetch()`, Postman, OpenAPI. Export: Zapi JSON, Postman v2.1, history, full backup.
 - Themes: System, Dark, Light, Midnight, High contrast, with accent colours and editor font size.
+- cURL import and code generation for form-data and URL-encoded bodies, checked end to end against a local server:
+  `-F` modifiers (`;type=`, `;filename=`) are kept instead of being glued to the value; `--form=`, `--form-string`, `-Fa=1`, `--opt=value` and combined
+  flags work; Postman's `file=@"/path with spaces"` and quoted values work; `--data-urlencode`, `-d @file`, `--data-binary @file`, `-T`, `-I`, `--digest`,
+  `--ntlm`, `--oauth2-bearer` and `Name;` headers are understood. A browser's "Copy as cURL" for a multipart form (Chrome bash and Windows cmd, Firefox,
+  `fetch()`) becomes real form rows instead of one big raw body; the file is not in a copied command, so Zapi asks you to choose it. PowerShell backtick-quotes
+  work. Code generation now covers multipart in every language (it only worked in cURL and Python before) and keeps content types and filenames.
+  Sending a file field with no file chosen gives a clear message.
 - Scripts now live on one Scripts tab, like Postman, with a Pre-request / Post-response switch (a dot shows which has content); the old separate Pre-request Script and Tests tabs are gone. Stored requests are unchanged.
 - Collection and folder settings: authorization, headers and pre-request / test scripts set once and inherited by the requests inside (right-click a collection or folder, Settings; also in the command palette). New requests default to "Inherit auth from parent"; a request can set its own, a folder overrides its collection, scripts run collection, then folders, then the request. Applies to Send, the Runner, the CLI, load tests, Copy as cURL and Code. Postman import keeps collection / folder auth and scripts instead of copying them into every request, and export writes them back. The sidebar can no longer be dragged too narrow to fit its tabs and buttons.
 - Fixed: clicking a row in the response Headers (and other read-only tables) made its text disappear; selected rows now keep readable text in every theme.
